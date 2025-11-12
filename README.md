@@ -5,8 +5,8 @@
   <a href="https://t.me/xd_anas"><img src="https://img.shields.io/badge/Developer-⏤͟͞〲ᗩᑎᗩՏ%20𓊈乂ᗪ𓊉-magenta?style=for-the-badge" /></a>
   <img src="https://img.shields.io/github/package-json/v/anas-xd/IRAMiss_Bot?color=brightgreen&style=for-the-badge" />
   <img src="https://img.shields.io/badge/Language-BN%20%26%20EN-orange?style=for-the-badge" />
-  <a href="https://github.com/anas-xd/IRAMiss_Bot/issues">
-    <img src="https://img.shields.io/github/anas-xd/IRAMiss_Bot?style=for-the-badge&color=orange" alt="Issues">
+  <a href="https://github.com/dragonhacker095-collab/IRAMiss_Bot/issues">
+    <img src="https://img.shields.io/github/dragonhacker095-collab/IRAMiss_Bot?style=for-the-badge&color=orange" alt="Issues">
   </a>
   <img src="https://img.shields.io/badge/License-Protected-red?style=for-the-badge" />
 </p>
