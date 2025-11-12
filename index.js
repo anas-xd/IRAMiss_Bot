@@ -93,8 +93,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  const time = getCurrentTime();
-  res.send(`🌐 ${config.botname} is running — ${time}`);
+  const filePath = path.join(__dirname, "index.html");
+  res.sendFile(filePath);
 });
 
 app.listen(PORT, () => {
