@@ -58,33 +58,34 @@ module.exports = {
       ];
       const image = imgLinks[Math.floor(Math.random() * imgLinks.length)];
 
-      // ===== MESSAGE =====
+      // ===== MESSAGE (HTML format) =====
       const caption = `
-🌸 *BOT & OWNER INFORMATION*
+<b>🌸 BOT & OWNER INFORMATION</b>
 
-🤖 *Bot Name:* ${botName}
-👑 *Owner:* ${ownerName}
-📱 *Telegram:* ${ownerTag}
-🌐 *Facebook:* [Click Here](${fbLink})
+🤖 <b>Bot Name:</b> ${botName}
+👑 <b>Owner:</b> ${ownerName}
+📱 <b>Telegram:</b> ${ownerTag}
+🌐 <b>Facebook:</b> <a href="${fbLink}">Click Here</a>
 
-⚙️ *Prefix:* \`${config.prefix}\`
-🕓 *Uptime:* ${hours}h ${minutes}m ${seconds}s
-🕒 *Server Time:* ${timeNow} (${tz})
-📶 *Ping:* ${pingMs} ms
+⚙️ <b>Prefix:</b> ${config.prefix}
+🕓 <b>Uptime:</b> ${hours}h ${minutes}m ${seconds}s
+🕒 <b>Server Time:</b> ${timeNow} (${tz})
+📶 <b>Ping:</b> ${pingMs} ms
 
-📊 *Statistics*
+📊 <b>Statistics</b>
 • Commands Loaded: ${commandsCount}
 • Memory Usage: ${memMb} MB
 
-🌍 *API Status*
+🌍 <b>API Status</b>
 • Telegram API: ${apiStatus}
 • Response Time: ${apiPing} ms
 
-❤️ *Thanks for using ${botName}!*`;
+❤️ <b>Thanks for using ${botName}!</b>`;
 
+      // ===== SEND MESSAGE =====
       await ctx.replyWithPhoto(image, {
         caption,
-        parse_mode: "Markdown",
+        parse_mode: "HTML",
       });
     } catch (err) {
       console.error("❌ Error in /info command:", err);
