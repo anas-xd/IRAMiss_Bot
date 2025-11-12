@@ -1,7 +1,7 @@
 module.exports.config = {
   name: "war",
   version: "3.0.0",
-  hasPermssion: 1,
+  hasPermssion: 0,
   credits: "Anas XD",
   description: "Roast wars — reply, mention or text target 🔥",
   commandCategory: "fun",
