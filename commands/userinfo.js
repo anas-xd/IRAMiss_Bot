@@ -1,53 +1,57 @@
-const fs = require("fs-extra");
+const { readFileSync } = require("fs");
 const path = require("path");
-const moment = require("moment-timezone");
+const dbFile = path.join(__dirname, "../database/users.json");
 
 module.exports = {
   name: "userinfo",
-  description: "Shows your Telegram profile info",
-  category: "general",
-  usage: "/userinfo",
-  cooldown: 3,
-  hasPermission: 0,
-  credits: "⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉",
+  description: "Display detailed information about the current user.",
 
   run: async (ctx) => {
     try {
-      const dbPath = path.join(__dirname, "..", "database", "users.json");
-      const users = fs.existsSync(dbPath) ? await fs.readJson(dbPath) : [];
-      const user = users.find(u => u.id === ctx.from.id);
+      const users = JSON.parse(readFileSync(dbFile, "utf8"));
+      const user = users.find(u => u.id === String(ctx.from.id)) || {};
 
-      const id = ctx.from.id;
-      const name = `${ctx.from.first_name || ""} ${ctx.from.last_name || ""}`.trim();
-      const username = ctx.from.username ? `@${ctx.from.username}` : "—";
-      const isPremium = ctx.from.is_premium ? "💎 YES" : "❌ NO";
-      const joinDate = user?.added_at || "Unknown";
-      const lastActive = user?.last_active || "N/A";
+      // Escape HTML special chars to prevent Telegram parsing issues
+      const escape = (text) => String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      const id = escape(ctx.from.id);
+      const name = escape(ctx.from.first_name || "N/A");
+      const username = ctx.from.username ? `@${escape(ctx.from.username)}` : "N/A";
+      const premium = ctx.from.is_premium ? "💎 <b>YES (TG PREMIUM)</b>" : "⚪ NO";
+      const addedAt = escape(user.added_at || "Unknown");
+      const lastActive = escape(user.last_active || "N/A");
 
       const caption = `
-👤 *USER INFORMATION*
+🌸 <b>『 ᴜꜱᴇʀ ɪɴꜰᴏ 』</b>
+──────────────────────
 
-🪪 *ID:* \`${id}\`
-🧭 *Name:* ${name}
-🔗 *Username:* ${username}
-💠 *Premium:* ${isPremium}
+🪪 <b>ID:</b> <code>${id}</code>
+👤 <b>Name:</b> ${name}
+🔗 <b>Username:</b> ${username}
+💠 <b>Premium:</b> ${premium}
 
-📆 *Joined:* ${joinDate}
-🕒 *Last Active:* ${lastActive}
+📆 <b>Joined:</b> ${addedAt}
+🕒 <b>Last Active:</b> ${lastActive}
+
+──────────────────────
+⚙️ <b>Powered by:</b> <a href="https://t.me/xd_anas">⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</a>
 `;
 
-      // Try to get the user’s profile photo
-      const photos = await ctx.telegram.getUserProfilePhotos(id, 0, 1);
+      const profilePhoto = "https://telegra.ph/file/cc716e89f66f9d28d8e6a.jpg"; // fallback avatar
 
-      if (photos.total_count > 0) {
-        const fileId = photos.photos[0][0].file_id;
-        await ctx.replyWithPhoto(fileId, { caption, parse_mode: "Markdown" });
-      } else {
-        await ctx.reply(caption, { parse_mode: "Markdown" });
-      }
+      await ctx.replyWithPhoto(
+        { url: profilePhoto },
+        {
+          caption,
+          parse_mode: "HTML"
+        }
+      );
     } catch (err) {
-      console.error("❌ Error in /userinfo:", err);
-      ctx.reply("⚠️ Unable to fetch user information.");
+      console.error("❌ userinfo error:", err);
+      ctx.reply("⚠️ Unable to fetch user info right now.");
     }
-  }
+  },
 };
