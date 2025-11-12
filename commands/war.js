@@ -1,28 +1,39 @@
-module.exports = {
+module.exports.config = {
   name: "war",
-  description: "Start a fun roast war with another user 😎",
-  usage: "/war @username",
-  run: async (ctx) => {
-    const replyUser = ctx.message.reply_to_message
-      ? ctx.message.reply_to_message.from
-      : ctx.message.entities?.find(e => e.type === "mention")
-      ? null
-      : null;
+  version: "3.0.0",
+  hasPermssion: 0,
+  credits: "Anas XD",
+  description: "Roast wars — reply, mention or text target 🔥",
+  commandCategory: "fun",
+  usages: "war [mention | text | reply]",
+  cooldowns: 5,
+};
 
-    const target =
-      ctx.message.reply_to_message?.from ||
-      ctx.message.entities?.find(e => e.type === "mention");
+module.exports.run = async function ({ api, event, args }) {
+  let target;
 
-    if (!target && !ctx.message.reply_to_message) {
-      return ctx.reply("⚔️ Please reply to someone or mention a user to start the roast war!");
-    }
+  // If the user replies to someone
+  if (event.type === "message_reply" && event.messageReply.senderID) {
+    const info = await api.getUserInfo(event.messageReply.senderID);
+    target = info[event.messageReply.senderID].name;
+  }
+  // If mention
+  else if (Object.keys(event.mentions).length > 0) {
+    const mention = Object.keys(event.mentions)[0];
+    target = event.mentions[mention];
+  }
+  // If text input
+  else if (args.length > 0) {
+    target = args.join(" ");
+  }
+  // Default fallback
+  else {
+    target = "everyone 😈";
+  }
 
-    const userName = ctx.from.first_name || "You";
-    const targetName = target
-      ? target.first_name || "Opponent"
-      : "Opponent";
+  const send = (msg) => api.sendMessage(msg, event.threadID);
 
-    const lines = [
+  const lines = [
       `🔥 ${userName} challenges ${targetName} to a friendly roast battle!`,
       `💣 ${userName} drops the first joke!`,
       `😂 ${targetName} tries to defend but laughs too hard!`,
@@ -56,12 +67,7 @@ module.exports = {
       `এই যে মাগির পোলা শুন তর আব্বুর নাম টা মনে রাখবি সাহু ওকে বান্দির পোলা গালি বাজ হয়ে গেসিস গালি তর আম্মুর ভুদা দিয়ে জত্ন করে বরে দিভো বান্দির পোলা `  
       `মুরগি আব্বু ডাক ওকে সাহু তর রিয়েল পাপ্পা বাতিজা 😒😒`
     ];
-
-    // Send messages with a bit of delay to make it dramatic
-    for (let i = 0; i < lines.length; i++) {
-      setTimeout(() => {
-        ctx.reply(lines[i]);
-      }, i * 2000); // 2-second gap between messages
-    }
-  },
+  for (let i = 0; i < lines.length; i++) {
+    setTimeout(() => send(lines[i]), i * 3000);
+  }
 };
