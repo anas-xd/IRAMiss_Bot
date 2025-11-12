@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRAMiss Bot 🌸</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: radial-gradient(circle at top left, #0f2027, #203a43, #2c5364);
+      color: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      margin-bottom: 0.5rem;
+      color: #ffb6c1;
+    }
+
+    h2 {
+      font-size: 1.3rem;
+      color: #b0c4de;
+      margin-bottom: 1rem;
+    }
+
+    .buttons {
+      margin-top: 1rem;
+      display: flex;
+      gap: 15px;
+    }
+
+    a {
+      text-decoration: none;
+      color: white;
+      background: linear-gradient(45deg, #ff416c, #ff4b2b);
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+
+    a:hover {
+      background: linear-gradient(45deg, #1f4037, #99f2c8);
+      transform: scale(1.05);
+    }
+
+    .status {
+      margin-top: 2rem;
+      font-size: 1.1rem;
+      background: rgba(255,255,255,0.1);
+      padding: 10px 20px;
+      border-radius: 10px;
+      display: inline-block;
+      backdrop-filter: blur(8px);
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background-color: #0f0;
+      box-shadow: 0 0 10px #0f0;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.6; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    footer {
+      position: absolute;
+      bottom: 15px;
+      font-size: 0.9rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤖 IRAMiss BOT</h1>
+  <h2>By ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 (@xd_anas)</h2>
+
+  <div class="buttons">
+    <a href="https://t.me/iramiss_bot" target="_blank">💬 Chat on Telegram</a>
+    <a href="https://t.me/xd_anas" target="_blank">👑 Owner Profile</a>
+  </div>
+
+  <div class="status">
+    <span class="pulse"></span> Bot is <b>Online</b>
+  </div>
+
+  <footer>© 2025 IRAMiss BOT • Powered by ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</footer>
+</body>
+</html>
