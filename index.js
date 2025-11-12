@@ -1,4 +1,4 @@
-// ====== MAIN TELEGRAM BOT FILE (PRO VERSION) ======
+// ====== MISS IRA BOT (PRO VERSION - WITH DB + STATUS TOGGLE) ======
 const { Telegraf } = require("telegraf");
 const fs = require("fs-extra");
 const path = require("path");
@@ -19,37 +19,33 @@ try {
   lang = require("./languages/en.lang.js");
 }
 
-// ====== ENSURE DATABASE ======
+// ====== DATABASE SETUP ======
 const dbDir = path.join(__dirname, "database");
 const dbFile = path.join(dbDir, "users.json");
-
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir);
+fs.ensureDirSync(dbDir);
 if (!fs.existsSync(dbFile)) fs.writeFileSync(dbFile, "[]", "utf8");
 
-// ====== LOAD SAFE USER DATA ======
 function loadUserData() {
   try {
     const data = fs.readFileSync(dbFile, "utf8") || "[]";
     return JSON.parse(data);
   } catch (err) {
-    console.error("⚠️ Corrupted users.json — resetting file...");
+    console.error("⚠️ Corrupted users.json — resetting...");
     fs.writeFileSync(dbFile, "[]", "utf8");
     return [];
   }
 }
 
-// ====== SAVE USER INFO ======
 function saveUserData(ctx) {
   try {
     const users = loadUserData();
     const u = ctx.from;
-    const userId = String(u.id);
+    const id = String(u.id);
 
-    const existing = users.find(x => x.id === userId);
-
+    const existing = users.find(x => x.id === id);
     if (!existing) {
       const newUser = {
-        id: userId,
+        id,
         first_name: u.first_name || "N/A",
         last_name: u.last_name || "",
         username: u.username ? `@${u.username}` : "N/A",
@@ -59,28 +55,26 @@ function saveUserData(ctx) {
         last_active: getTime(),
       };
       users.push(newUser);
-      console.log(`🆕 New user added: ${u.first_name} (${userId})`);
+      console.log(`🆕 New user added: ${u.first_name} (${id})`);
     } else {
       existing.last_active = getTime();
     }
 
     fs.writeFileSync(dbFile, JSON.stringify(users, null, 2));
   } catch (err) {
-    console.error("❌ Failed to write user data:", err);
+    console.error("❌ Failed to save user:", err);
   }
 }
 
-// ====== TIMEZONE FUNCTION ======
 function getTime() {
   const tz = config.timezone || "Asia/Dhaka";
   return moment().tz(tz).format("DD/MM/YYYY HH:mm:ss");
 }
 
-// ====== BOT SETUP ======
+// ====== TELEGRAM BOT ======
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 global.commands = new Map();
 
-// ====== LOAD COMMANDS ======
 fs.readdirSync("./commands").forEach(file => {
   if (file.endsWith(".js")) {
     try {
@@ -95,7 +89,6 @@ fs.readdirSync("./commands").forEach(file => {
   }
 });
 
-// ====== START MESSAGE ======
 bot.start(async (ctx) => {
   saveUserData(ctx);
   const name = ctx.from.first_name || "User";
@@ -104,17 +97,14 @@ bot.start(async (ctx) => {
     : `👋 Hello *${name}!*  
 Welcome to *${config.botname}*!  
 Use \`${config.prefix}help\` to see all commands.`;
-
   ctx.reply(msg, { parse_mode: "Markdown" });
 });
 
-// ====== TEXT COMMAND HANDLER ======
 bot.on("text", async (ctx) => {
   const text = ctx.message.text || "";
   if (!text.startsWith(config.prefix)) return;
 
   saveUserData(ctx);
-
   const [cmdName, ...args] = text.slice(config.prefix.length).trim().split(" ");
   const command = global.commands.get(config.prefix + cmdName);
 
@@ -134,31 +124,80 @@ bot.on("text", async (ctx) => {
   }
 });
 
-// ====== EXPRESS SERVER (for uptime + status) ======
+// ====== EXPRESS SERVER ======
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Serve index.html directly
 app.get("/", (req, res) => {
-  const users = loadUserData();
-  res.send(`
-  <html>
-    <head><title>${config.botname} | Status</title></head>
-    <body style="background:#0d1117;color:#e6edf3;text-align:center;font-family:sans-serif;">
-      <h1>🤖 ${config.botname} is Active</h1>
-      <p>🕓 ${getTime()} (${config.timezone})</p>
-      <p>👥 Total Users: <b>${users.length}</b></p>
-      <p>💻 Server: Render (Node.js)</p>
-      <p>🌐 Language: ${config.language}</p>
-      <hr style="width:50%;border:1px solid #444;">
-      <p>💖 Made by <a href="https://t.me/xd_anas" style="color:#58a6ff;text-decoration:none;">⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</a></p>
-    </body>
-  </html>
-  `);
+  const indexPath = path.join(__dirname, "index.html");
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  res.send("<h2>Index file not found.</h2>");
 });
 
-app.listen(PORT, () => console.log(`🌍 Web server active on port ${PORT}`));
+// ====== Toggleable Status Page ======
+app.get("/status", (req, res) => {
+  const users = loadUserData();
+  const statsHTML = `
+  <html>
+  <head>
+    <title>${config.botname} | Status</title>
+    <style>
+      body {
+        background: #0d1117;
+        color: #e6edf3;
+        font-family: 'Poppins', sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 40px;
+      }
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background: linear-gradient(45deg, #ff416c, #ff4b2b);
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .btn:hover {
+        background: linear-gradient(45deg, #1f4037, #99f2c8);
+        transform: scale(1.05);
+      }
+      #stats {
+        margin-top: 25px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🤖 ${config.botname} Dashboard</h1>
+    <button class="btn" onclick="toggleStats()">🔁 Toggle Status</button>
+    <div id="stats">
+      <h3>📊 Bot Statistics</h3>
+      <p>🕒 ${getTime()} (${config.timezone})</p>
+      <p>👥 Total Users: <b>${users.length}</b></p>
+      <p>🌐 Language: ${config.language}</p>
+      <p>💻 Server: Render</p>
+      <p>💖 Owner: <a href="https://t.me/xd_anas" style="color:#ffb6c1;">⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</a></p>
+    </div>
 
-// ====== LAUNCH BOT (WEBHOOK MODE for Render) ======
+    <script>
+      function toggleStats() {
+        const el = document.getElementById("stats");
+        el.style.display = el.style.display === "none" ? "block" : "none";
+      }
+    </script>
+  </body>
+  </html>
+  `;
+  res.send(statsHTML);
+});
+
+// ====== LAUNCH BOT WITH WEBHOOK ======
 (async () => {
   try {
     const webhookURL = `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -169,3 +208,5 @@ app.listen(PORT, () => console.log(`🌍 Web server active on port ${PORT}`));
     console.error("❌ Launch failed:", err);
   }
 })();
+
+app.listen(PORT, () => console.log(`🌍 Web server active on port ${PORT}`));
