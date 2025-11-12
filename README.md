@@ -141,7 +141,7 @@ You can add a **custom banner image** at the top (recommended size: `1280x400px`
 
 
 ---
-```
+
 <p align="center">
   <b>ᴍɪꜱꜱ ﾉ尺卂</b><br>
   <i>“A bot that talks like a friend, not a script.”</i><br><br>
