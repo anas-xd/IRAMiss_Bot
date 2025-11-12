@@ -144,8 +144,8 @@ You can add a **custom banner image** at the top (recommended size: `1280x400px`
 
 <p align="center">
   <b>ᴍɪꜱꜱ ﾉ尺卂</b><br>
-  <i>“A bot that talks like a friend, not a script.”</i><br><br>
-  <sub>Made with ❤️ by ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 | 2025</sub>
+  <i>“A BOT that talks like a Friend, not a Script.”</i><br><br>
+  <sub>Made with ❤️ by ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 | © 2025</sub> 
 </p>
-```
+
 ---
