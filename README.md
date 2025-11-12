@@ -15,5 +15,3 @@ Originally inspired by *Messenger BOT’s project*, this version has been improv
 - 🎨 Fully customizable — name, prefix, responses, and images
 
 ---
-
-## 🧩 Project Structure
