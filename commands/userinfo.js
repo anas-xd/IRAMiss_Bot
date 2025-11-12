@@ -11,7 +11,6 @@ module.exports = {
       const users = JSON.parse(readFileSync(dbFile, "utf8"));
       const user = users.find(u => u.id === String(ctx.from.id)) || {};
 
-      // Escape HTML special chars to prevent Telegram parsing issues
       const escape = (text) => String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -40,15 +39,17 @@ module.exports = {
 ⚙️ <b>Powered by:</b> <a href="https://t.me/xd_anas">⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</a>
 `;
 
-      const profilePhoto = "https://telegra.ph/file/cc716e89f66f9d28d8e6a.jpg"; // fallback avatar
+      const fallbackPhoto = "https://i.ibb.co/0F2ZB8H/avatar.png"; // 100% stable CDN image
 
-      await ctx.replyWithPhoto(
-        { url: profilePhoto },
-        {
-          caption,
-          parse_mode: "HTML"
-        }
-      );
+      try {
+        await ctx.replyWithPhoto(
+          { url: fallbackPhoto },
+          { caption, parse_mode: "HTML" }
+        );
+      } catch {
+        // If image fails to send, fallback to text message
+        await ctx.reply(caption, { parse_mode: "HTML" });
+      }
     } catch (err) {
       console.error("❌ userinfo error:", err);
       ctx.reply("⚠️ Unable to fetch user info right now.");
