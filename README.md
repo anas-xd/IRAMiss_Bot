@@ -1,7 +1,7 @@
 # 🌸 ᴍɪꜱꜱ ﾉ尺卂 — Telegram Bot
 
 A modern and customizable Telegram bot built with **Node.js** and **Telegraf**.  
-Originally inspired by *Messenger BOT’s project*, this version has been improved, and enhanced by **ᴍɪꜱꜱ ﾉ尺卂**.
+Originally inspired by *Messenger BOT’s project*, this version has been improved and enhanced by **ᴍɪꜱꜱ ﾉ尺卂**.
 
 ---
 
