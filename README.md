@@ -1,154 +1,228 @@
-<h1 align="center">🌺 ᴍɪꜱꜱ ﾉ尺卂 — Advanced Telegram AI Bot</h1>
+---
 
-<p align="center">
-  <a href="https://t.me/Iramiss_bot"><img src="https://img.shields.io/badge/Telegram-Bot-blue?style=for-the-badge&logo=telegram" /></a>
-  <a href="https://t.me/xd_anas"><img src="https://img.shields.io/badge/Developer-⏤͟͞〲ᗩᑎᗩՏ%20𓊈乂ᗪ𓊉-magenta?style=for-the-badge" /></a>
-  <img src="https://img.shields.io/github/package-json/v/anas-xd/IRAMiss_Bot?color=brightgreen&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Language-BN%20%26%20EN-orange?style=for-the-badge" />
-  <a href="https://github.com/dragonhacker095-collab/IRAMiss_Bot/issues">
-    <img src="https://img.shields.io/github/dragonhacker095-collab/IRAMiss_Bot?style=for-the-badge&color=orange" alt="Issues">
-  </a>
-  <img src="https://img.shields.io/badge/License-Protected-red?style=for-the-badge" />
-</p>
+<div align="center">🌺 ᴍɪꜱꜱ ﾉ尺卂 — The Next-Generation Telegram AI Companion</div>
+
+<div align="center">Beautiful ✦ Fast ✦ Intelligent
+
+A modern multi-functional Telegram bot built with Node.js + Telegraf, designed to feel alive, not scripted.
+Featuring smart replies, multi-language support, real-time system stats, and a stylish developer dashboard.
+
 
 ---
 
-### 💎 Overview
-> “Beautiful, Smart & Fast — a next-generation AI bot with personality.”
+🔗 Quick Links
 
-**ᴍɪꜱꜱ ﾉ尺卂** is a **multifunctional Node.js Telegram Bot**, crafted for performance, responsiveness, and fun.  
-She speaks both **Bangla 🇧🇩** and **English 🇬🇧**, replies with emotion, and performs real-time system tasks.  
-The bot is fully modular and developer-friendly.
+🤖 Launch Bot • 👑 Owner • 📦 Repository
+
 
 ---
 
-### 🧩 Core Features
-- 💬 **AI Chat Support** — friendly, natural replies  
-- ⚙️ **Command Framework** — easy to extend  
-- 🌍 **Multilingual System** — English & Bangla  
-- 🕓 **Uptime Monitor** — 24/7 via Render  
-- 📊 **Statistics Dashboard** — ping, uptime, memory  
-- 🔒 **Configurable** — simple `config.json` & `.env`  
+🛡️ Shields
+
+<img src="https://img.shields.io/github/package-json/v/anas-xd/IRAMiss_Bot?style=for-the-badge&color=brightgreen" />
+<img src="https://img.shields.io/badge/Language-EN%20%26%20BN-orange?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Framework-Telegraf-blue?style=for-the-badge" />
+<img src="https://img.shields.io/badge/License-Protected-red?style=for-the-badge" /></div>
+---
+
+✨ Overview
+
+> “ᴍɪꜱꜱ ﾉ尺卂 is not just a bot — she’s an experience.”
+
+
+
+Built to feel friendly, soft, smart, and fast, this bot combines
+AI-style conversation, advanced command modules, and a clean developer-friendly architecture.
+
+Perfect for:
+
+Telegram power users
+
+Developers who want a modular bot
+
+Personal assistant / fun bot usage
+
+Beginners learning Node.js bot development
+
+
 
 ---
 
-### 🛠️ Tech Stack
-| Layer | Technology |
-|-------|-------------|
-| **Runtime** | Node.js (v18+) |
-| **Framework** | Telegraf |
-| **Hosting** | Render (Free Tier Supported) |
-| **Timezone** | Asia/Dhaka |
-| **Languages** | Bangla (bn) & English (en) |
+🚀 Highlight Features
+
+🎀 Emotional AI-Style Chat
+
+Natural, expressive replies with a unique personality.
+
+🧩 Modular Command System
+
+Clean /commands folder — add new commands in seconds.
+
+🌍 Multi-Language (EN + BN)
+
+Dynamic language engine, fully customizable.
+
+📁 Local User Database
+
+Lightweight JSON DB — no MongoDB required.
+
+📊 Web Dashboard
+
+Beautiful /status page showing:
+
+total users
+
+last update time
+
+timezone
+
+server uptime
+
+bot statistics
+
+
+⚙️ Render-Optimized
+
+Auto-uptime webhook system → stays online 24/7 even on free tier.
+
 
 ---
 
-### ⚡ Quick Deploy (Render)
-Deploy **ᴍɪꜱꜱ ﾉ尺卂** easily within minutes.
+🛠️ Tech Stack
 
-#### 1️⃣ Fork this Repository
-Click **Fork** at the top of the page.
+Component	Technology
 
-#### 2️⃣ Create a New Render Web Service
-- Go to [Render](https://render.com)
-- Select this repo → Choose “Web Service”
-- Set:
-  - **Build Command:** `npm install`
-  - **Start Command:** `node index.js`
-  - **Environment:** Node 18 LTS
-  - **Region:** Singapore or Frankfurt
+Runtime	Node.js 18+
+Bot API	Telegraf Framework
+Hosting	Render Web Services
+Database	JSON Local Storage
+Languages	Bangla + English
+Timezone	Asia/Dhaka
 
-#### 3️⃣ Add Environment Variable
-| Key | Value |
-|-----|-------|
-| `TELEGRAM_BOT_TOKEN` | Your token from [@BotFather](https://t.me/BotFather) |
 
-Render will build, start, and auto-ping the bot to stay alive 🚀
 
 ---
 
-### 👑 Developer Info
-| Role | Name | Contact |
-|------|------|----------|
-| **Lead Developer / Owner** | ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 | [@xd_anas](https://t.me/xd_anas) |
-| **Official Bot** | ᴍɪꜱꜱ ﾉ尺卂 | [@Iramiss_bot](https://t.me/Iramiss_bot) |
-| **Version** | 1.0.0 | |
+📂 Project Structure
 
-> 🪶 _All edits must keep visible credit to the developer._
+IRAMiss_Bot/
+│
+├── commands/        # Command scripts
+├── languages/       # Language files (en.lang.js, bn.lang.js)
+├── database/        # Local users.json DB
+│
+├── index.js         # Main bot file
+├── config.json      # Bot configuration
+├── package.json     # Dependencies
+├── .env             # Secret token
+└── README.md        # This file
+
 
 ---
 
-### 🧩 Project Structure
+⚡ Deploy on Render (Ultra Easy)
 
-📦 IRAMiss_Bot/ ┣ 📁 commands/       → Bot commands (.js) ┣ 📁 languages/      → Language files ┣ 📄 config.json     → Bot configuration ┣ 📄 index.js        → Main entry point ┣ 📄 .env            → Environment variables ┗ 📄 README.md       → This file
+1️⃣ Fork the Repo
+
+Click Fork above.
+
+2️⃣ Create a Render Service
+
+New → Web Service
+
+Connect your fork
+
+Set:
+
+
+Option	Value
+
+Build Command	npm install
+Start Command	node index.js
+Runtime	Node 18
+Instance	Free Tier
+
+
+3️⃣ Add Environment Variable
+
+Key	Value
+
+TELEGRAM_BOT_TOKEN	Your token from @BotFather
+
+
+Render will auto-deploy and keep your bot alive using the built-in webhook.
+
 
 ---
 
-<!--
-### 🧠 Available Commands (Hidden)
-| Command | Description |
-|----------|-------------|
-| `/start` | Welcome message |
-| `/info` | Show bot and owner info |
-| `/help` | Command list |
-| `/ping` | Network speed check |
-| `/lang` | Switch language |
--->
+📸 Preview (Optional Banner)
+
+You can add your own banner here:
+
+![ᴍɪꜱꜱ ﾉ尺卂 Banner](https://your-banner-link.com/banner.png)
+
 
 ---
 
-### 📜 License & Terms of Use
+👑 Developer & Credits
 
-Copyright © 2025 ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 All Rights Reserved.
+Role	Name	Contact
 
-✅ You May:
-
-Use this bot for personal or educational projects.
-
-Modify code for private use.
-
-Fork this repo with proper credit.
+Creator & Lead Developer	⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉	@xd_anas
+Official Bot	ᴍɪꜱꜱ ﾉ尺卂	@Iramiss_bot
+Version	1.0.0	—
 
 
-❌ You May NOT:
-
-Remove or alter developer credits.
-
-Rebrand or resell this bot.
-
-Redistribute without written consent.
+> 🔥 Please keep developer credits visible in all public forks.
 
 
-Violations may lead to DMCA takedown or permanent ban.
+
 
 ---
 
-### 🌸 Optional: Add a Visual Banner
-Want your GitHub repo to look more premium?  
-You can add a **custom banner image** at the top (recommended size: `1280x400px`).
+📜 License
 
-```markdown
-![ᴍɪꜱꜱ ﾉ尺卂 Banner](https://your-banner-link-here.com/banner.png)
-```
+© 2025 ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉
+All rights reserved.
+
+✔ Allowed
+
+Personal usage
+
+Educational usage
+
+Private modifications
+
+Fork with visible credit
+
+
+❌ Not Allowed
+
+Removing credits
+
+Rebranding
+
+Reselling
+
+Republishing modified versions publicly
+
+
+Violations may result in DMCA takedown.
+
 
 ---
 
-💖 Support & Contact
+💖 Support
 
 📩 Developer: @xd_anas
-
 🤖 Try the Bot: @Iramiss_bot
-
-🌍 Coming Soon: Community & API Docs
-
 
 
 ---
 
-<p align="center">
-  <b>ᴍɪꜱꜱ ﾉ尺卂</b><br>
-  <i>“A BOT that talks like a Friend, not a Script.”</i><br><br>
-  <sub>Made with ❤️ by ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 | © 2025</sub> 
-</p>
+<div align="center">🌸 “A bot that behaves like a friend — not a machine.”
 
+<sub>Made with ❤️ by ⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉 • © 2025</sub>
+
+</div>
 ---
