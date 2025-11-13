@@ -1,6 +1,6 @@
 ---
 
-<div align="center">🌺 ᴍɪꜱꜱ ﾉ尺卂 — The Next-Generation Telegram AI Companion</div>
+# <div align="center">🌺 ᴍɪꜱꜱ ﾉ尺卂 — The Next-Generation Telegram AI Companion</div> 
 
 <div align="center">Beautiful ✦ Fast ✦ Intelligent
 
