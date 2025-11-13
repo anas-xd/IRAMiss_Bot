@@ -1,4 +1,4 @@
-// ====== MISS IRA BOT (PRO VERSION - WITH DB + STATUS TOGGLE) ======
+// ====== MISS IRA BOT (FULL REBUILD: AUTO WEBHOOK + POLLING + OPTIONAL MONGO) ======
 const { Telegraf } = require("telegraf");
 const fs = require("fs-extra");
 const path = require("path");
@@ -9,204 +9,182 @@ require("dotenv").config();
 // ====== CONFIG ======
 const config = require("./config.json");
 
-// ====== LANGUAGE HANDLER ======
-let lang;
-try {
-  lang = require(`./languages/${config.language}.lang.js`);
-  console.log(`🌐 Language set to: ${config.language}`);
-} catch {
-  console.warn(`⚠️ Language file not found for '${config.language}', using English fallback.`);
-  lang = require("./languages/en.lang.js");
+// ====== OPTIONAL MONGOOSE ======
+let useMongo = false;
+let mongoose; // declared if used
+if (process.env.MONGO_URI) {
+  try {
+    mongoose = require("mongoose");
+    useMongo = true;
+    mongoose
+      .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+      .then(() => console.log("🗄️ Connected to MongoDB"))
+      .catch((e) => { console.error("❌ MongoDB connection failed:", e); useMongo = false; });
+  } catch (e) {
+    console.warn("⚠️ mongoose not installed. To use Mongo, run: npm i mongoose");
+    useMongo = false;
+  }
 }
 
-// ====== DATABASE SETUP ======
+// ====== LANGUAGE LOADER ======
+let lang;
+try { lang = require(`./languages/${config.language}.lang.js`); }
+catch { lang = require("./languages/en.lang.js"); }
+
+// ====== DATABASE (file fallback) ======
 const dbDir = path.join(__dirname, "database");
 const dbFile = path.join(dbDir, "users.json");
 fs.ensureDirSync(dbDir);
 if (!fs.existsSync(dbFile)) fs.writeFileSync(dbFile, "[]", "utf8");
 
-function loadUserData() {
+function safeLoadUsers() {
   try {
-    const data = fs.readFileSync(dbFile, "utf8") || "[]";
-    return JSON.parse(data);
-  } catch (err) {
-    console.error("⚠️ Corrupted users.json — resetting...");
+    const raw = fs.readFileSync(dbFile, "utf8") || "[]";
+    return JSON.parse(raw);
+  } catch (e) {
     fs.writeFileSync(dbFile, "[]", "utf8");
     return [];
   }
 }
 
-function saveUserData(ctx) {
+function safeSaveUsers(arr) {
+  try { fs.writeFileSync(dbFile, JSON.stringify(arr, null, 2), "utf8"); }
+  catch (e) { console.error("❌ Failed to write users.json", e); }
+}
+
+// If using Mongo, define a simple user schema
+let UserModel = null;
+if (useMongo) {
+  const userSchema = new mongoose.Schema({
+    id: { type: String, unique: true },
+    first_name: String,
+    last_name: String,
+    username: String,
+    is_premium: Boolean,
+    language_code: String,
+    added_at: String,
+    last_active: String
+  });
+  UserModel = mongoose.model("User", userSchema);
+}
+
+// ====== HELPERS ======
+function now() { return moment().tz(config.timezone || "Asia/Dhaka").format("DD/MM/YYYY HH:mm:ss"); }
+
+async function saveUser(ctx) {
   try {
-    const users = loadUserData();
     const u = ctx.from;
-    const id = String(u.id);
+    if (!u || !u.id) return;
+    const payload = {
+      id: String(u.id),
+      first_name: u.first_name || "",
+      last_name: u.last_name || "",
+      username: u.username ? `@${u.username}` : "",
+      is_premium: !!u.is_premium,
+      language_code: u.language_code || "",
+      added_at: now(),
+      last_active: now()
+    };
 
-    const existing = users.find(x => x.id === id);
-    if (!existing) {
-      const newUser = {
-        id,
-        first_name: u.first_name || "N/A",
-        last_name: u.last_name || "",
-        username: u.username ? `@${u.username}` : "N/A",
-        is_premium: !!u.is_premium,
-        language_code: u.language_code || "N/A",
-        added_at: getTime(),
-        last_active: getTime(),
-      };
-      users.push(newUser);
-      console.log(`🆕 New user added: ${u.first_name} (${id})`);
+    if (useMongo && UserModel) {
+      await UserModel.findOneAndUpdate({ id: payload.id }, payload, { upsert: true, setDefaultsOnInsert: true });
     } else {
-      existing.last_active = getTime();
+      const users = safeLoadUsers();
+      const exist = users.find(x => x.id === payload.id);
+      if (!exist) users.push(payload);
+      else { exist.last_active = now(); exist.username = payload.username; exist.first_name = payload.first_name; }
+      safeSaveUsers(users);
     }
-
-    fs.writeFileSync(dbFile, JSON.stringify(users, null, 2));
-  } catch (err) {
-    console.error("❌ Failed to save user:", err);
-  }
+  } catch (e) { console.error("❌ saveUser error", e); }
 }
 
-function getTime() {
-  const tz = config.timezone || "Asia/Dhaka";
-  return moment().tz(tz).format("DD/MM/YYYY HH:mm:ss");
-}
-
-// ====== TELEGRAM BOT ======
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+// ====== BOT SETUP ======
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+if (!BOT_TOKEN) { console.error("❌ TELEGRAM_BOT_TOKEN missing in .env"); process.exit(1); }
+const bot = new Telegraf(BOT_TOKEN);
 global.commands = new Map();
 
-fs.readdirSync("./commands").forEach(file => {
-  if (file.endsWith(".js")) {
-    try {
-      const command = require(path.join(__dirname, "commands", file));
-      if (command.name && command.run) {
-        global.commands.set(config.prefix + command.name, command);
-        console.log(`✅ Loaded command: ${command.name}`);
-      }
-    } catch (err) {
-      console.error(`⚠️ Failed to load command ${file}:`, err);
+// ====== COMMAND LOADER ======
+const commandsPath = path.join(__dirname, "commands");
+fs.readdirSync(commandsPath).forEach(file => {
+  if (!file.endsWith(".js")) return;
+  try {
+    const cmd = require(path.join(commandsPath, file));
+    if (cmd.name && cmd.run) {
+      global.commands.set((config.prefix || "/") + cmd.name, cmd);
+      console.log(`✅ Loaded command: ${cmd.name}`);
     }
-  }
+  } catch (e) { console.error(`⚠️ Failed to load ${file}:`, e); }
 });
 
+// ====== START + TEXT HANDLER (prefix-only) ======
 bot.start(async (ctx) => {
-  saveUserData(ctx);
-  const name = ctx.from.first_name || "User";
-  const msg = lang.startMessage
-    ? lang.startMessage(name, config.botname, config.prefix)
-    : `👋 Hello *${name}!*  
-Welcome to *${config.botname}*!  
-Use \`${config.prefix}help\` to see all commands.`;
-  ctx.reply(msg, { parse_mode: "Markdown" });
+  await saveUser(ctx);
+  const name = ctx.from?.first_name || "User";
+  const m = (lang.startMessage) ? lang.startMessage(name, config.botname, config.prefix) : `Hello ${name}! Use ${config.prefix}help`;
+  return ctx.reply(m, { parse_mode: "Markdown" });
 });
 
 bot.on("text", async (ctx) => {
-  const text = ctx.message.text || "";
-  if (!text.startsWith(config.prefix)) return;
+  const text = (ctx.message && ctx.message.text) ? ctx.message.text.trim() : "";
+  if (!text.startsWith(config.prefix)) return; // only prefix commands
+  await saveUser(ctx);
 
-  saveUserData(ctx);
-  const [cmdName, ...args] = text.slice(config.prefix.length).trim().split(" ");
-  const command = global.commands.get(config.prefix + cmdName);
+  const [cmdNameRaw, ...rest] = text.slice(config.prefix.length).trim().split(/\s+/);
+  const cmdKey = (config.prefix || "/") + (cmdNameRaw || "");
 
-  if (!command) {
-    return ctx.reply(
-      lang.unknownCommand
-        ? lang.unknownCommand.replace("%1", cmdName)
-        : `❌ Unknown command: ${cmdName}\nTry: ${config.prefix}help`
-    );
+  // if user sends only prefix (e.g. "/"), run custom default
+  if (!cmdNameRaw) {
+    const defaultCmd = global.commands.get((config.prefix||"/") + (process.env.DEFAULT_CMD || "help"));
+    if (defaultCmd) return defaultCmd.run(ctx, rest);
+    return ctx.reply(`Type ${config.prefix}help to see commands.`);
   }
 
-  try {
-    await command.run(ctx, args);
-  } catch (err) {
-    console.error(`❌ Error in ${cmdName}:`, err);
-    ctx.reply(lang.commandError || "⚠️ Command execution failed.");
-  }
+  const command = global.commands.get(cmdKey);
+  if (!command) return ctx.reply(`❌ Unknown command: ${cmdNameRaw}`);
+
+  try { await command.run(ctx, rest); }
+  catch (e) { console.error(`❌ Command ${cmdNameRaw} error`, e); ctx.reply("⚠️ Command failed."); }
 });
 
-// ====== EXPRESS SERVER ======
+// ====== EXPRESS (serve index.html + status) ======
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Serve index.html directly
+app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (req, res) => {
   const indexPath = path.join(__dirname, "index.html");
-  if (fs.existsSync(indexPath)) {
-    return res.sendFile(indexPath);
-  }
-  res.send("<h2>Index file not found.</h2>");
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  const users = useMongo && UserModel ? 'MongoDB' : safeLoadUsers();
+  res.send(`<h2>${config.botname} — running</h2><p>Users: ${Array.isArray(users) ? users.length : users}</p>`);
 });
 
-// ====== Toggleable Status Page ======
-app.get("/status", (req, res) => {
-  const users = loadUserData();
-  const statsHTML = `
-  <html>
-  <head>
-    <title>${config.botname} | Status</title>
-    <style>
-      body {
-        background: #0d1117;
-        color: #e6edf3;
-        font-family: 'Poppins', sans-serif;
-        text-align: center;
-        margin: 0;
-        padding: 40px;
-      }
-      .btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 8px;
-        background: linear-gradient(45deg, #ff416c, #ff4b2b);
-        color: #fff;
-        font-weight: bold;
-        cursor: pointer;
-        transition: 0.3s;
-      }
-      .btn:hover {
-        background: linear-gradient(45deg, #1f4037, #99f2c8);
-        transform: scale(1.05);
-      }
-      #stats {
-        margin-top: 25px;
-        display: none;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>🤖 ${config.botname} Dashboard</h1>
-    <button class="btn" onclick="toggleStats()">🔁 Toggle Status</button>
-    <div id="stats">
-      <h3>📊 Bot Statistics</h3>
-      <p>🕒 ${getTime()} (${config.timezone})</p>
-      <p>👥 Total Users: <b>${users.length}</b></p>
-      <p>🌐 Language: ${config.language}</p>
-      <p>💻 Server: Render</p>
-      <p>💖 Owner: <a href="https://t.me/xd_anas" style="color:#ffb6c1;">⏤͟͞〲ᗩᑎᗩՏ 𓊈乂ᗪ𓊉</a></p>
-    </div>
-
-    <script>
-      function toggleStats() {
-        const el = document.getElementById("stats");
-        el.style.display = el.style.display === "none" ? "block" : "none";
-      }
-    </script>
-  </body>
-  </html>
-  `;
-  res.send(statsHTML);
+app.get("/status", async (req, res) => {
+  let total = 0;
+  if (useMongo && UserModel) total = await UserModel.countDocuments();
+  else total = safeLoadUsers().length;
+  res.send(`<!doctype html><html><body><h1>${config.botname} Status</h1><p>Time: ${now()}</p><p>Users: ${total}</p></body></html>`);
 });
 
-// ====== LAUNCH BOT WITH WEBHOOK ======
+// ====== AUTO-MODE: WEBHOOK (Render) or POLLING (Replit/Local) ======
 (async () => {
+  const renderURL = process.env.RENDER_EXTERNAL_URL || process.env.EXTERNAL_URL || "";
+  const webhookPath = `/bot${BOT_TOKEN}`;
   try {
-    const webhookURL = `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`;
-    await bot.telegram.setWebhook(webhookURL);
-    app.use(bot.webhookCallback(`/bot${process.env.TELEGRAM_BOT_TOKEN}`));
-    console.log(`🚀 ${config.botname} is online with webhook mode!`);
-  } catch (err) {
-    console.error("❌ Launch failed:", err);
+    if (renderURL) {
+      const webhookURL = `${renderURL}${webhookPath}`;
+      try { await bot.telegram.deleteWebhook(); } catch(e){}
+      await bot.telegram.setWebhook(webhookURL);
+      app.use(bot.webhookCallback(webhookPath));
+      console.log(`🚀 Webhook set: ${webhookURL}`);
+    } else {
+      await bot.launch();
+      console.log(`🚀 Bot launched in polling mode`);
+    }
+  } catch (e) {
+    console.error("❌ Launch error:", e);
+    // try fallback to polling
+    try { await bot.launch(); console.log("⚠️ Fallback: polling mode"); } catch (err) { console.error("❌ Final fallback failed", err); process.exit(1); }
   }
 })();
 
-app.listen(PORT, () => console.log(`🌍 Web server active on port ${PORT}`));
+app.listen(PORT, () => console.log(`🌍 Web server listening on ${PORT}`));
