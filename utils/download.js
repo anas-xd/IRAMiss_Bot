@@ -1,56 +1,37 @@
 // =========================================================
-// utils/download.js — YTDLP + Spotify (Render Safe)
+// utils/download.js — YTDLP only (Spotify metadata allowed)
 // =========================================================
 
 const fs = require("fs-extra");
 const path = require("path");
 const { ytdlp } = require("yt-dlp-exec");
-const Spotify = require("@nechlophomeriaa/spotifydl").default;
 
+// TMP folder
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
-
-// Spotify client
-let spot = null;
-if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
-  spot = new Spotify({
-    clientId: process.env.SPOTIFY_ID,
-    clientSecret: process.env.SPOTIFY_SECRET
-  });
-}
 
 // URL detectors
 const isYouTube = url =>
   /(youtube\.com|youtu\.be)/i.test(url);
 
 const isSpotify = url =>
-  /open\.spotify\.com\/(track)/i.test(url);
+  /open\.spotify\.com\/track/i.test(url);
 
 // MAIN FUNCTION
 async function downloadAudio(url, outPath) {
-  // ==========================
-  // SPOTIFY
-  // ==========================
+
+  // ==================================================
+  // SPOTIFY (metadata only — NO DOWNLOAD)
+  // ==================================================
   if (isSpotify(url)) {
-    if (!spot) throw new Error("Spotify keys missing");
-
-    try {
-      console.log("SPOTIFY → downloading…");
-
-      const track = await spot.downloadTrack(url); // Buffer
-      fs.writeFileSync(outPath, track);
-
-      console.log("SPOTIFY success");
-      return;
-    } catch (err) {
-      console.log("SPOTIFY error:", err.message);
-      throw new Error("Spotify download failed");
-    }
+    throw new Error(
+      "Spotify audio download disabled. Use metadata only."
+    );
   }
 
-  // ==========================
-  // YOUTUBE (yt-dlp-exec)
-  // ==========================
+  // ==================================================
+  // YOUTUBE DOWNLOAD (yt-dlp-exec)
+  // ==================================================
   if (isYouTube(url)) {
     try {
       console.log("YTDLP → downloading…");
