@@ -1,149 +1,78 @@
 // =========================================================
-// utils/download.js — FINAL 5-ENGINE DOWNLOADER (SAFE + CLEAN)
+// utils/download.js — YTDLP + Spotify (Render Safe)
 // =========================================================
 
 const fs = require("fs-extra");
 const path = require("path");
-const axios = require("axios");
-const ytdl = require("@distube/ytdl-core");   // Engine 1
+const { ytdlp } = require("yt-dlp-exec");
+const Spotify = require("@nechlophomeriaa/spotifydl").default;
 
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
 
-const delay = ms => new Promise(r => setTimeout(r, ms));
+// Spotify client
+let spot = null;
+if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
+  spot = new Spotify({
+    clientId: process.env.SPOTIFY_ID,
+    clientSecret: process.env.SPOTIFY_SECRET
+  });
+}
 
-/**
- * downloadAudio(url, outPath)
- * Returns file written OR throws error
- */
+// URL detectors
+const isYouTube = url =>
+  /(youtube\.com|youtu\.be)/i.test(url);
+
+const isSpotify = url =>
+  /open\.spotify\.com\/(track)/i.test(url);
+
+// MAIN FUNCTION
 async function downloadAudio(url, outPath) {
+  // ==========================
+  // SPOTIFY
+  // ==========================
+  if (isSpotify(url)) {
+    if (!spot) throw new Error("Spotify keys missing");
 
-  // ====================================================
-  // ENGINE 1 — ytdl-core (distube) — Fastest native
-  // ====================================================
-  try {
-    if (ytdl.validateURL(url)) {
-      await new Promise((resolve, reject) => {
-        const stream = ytdl(url, {
-          filter: "audioonly",
-          quality: "highestaudio",
-          highWaterMark: 1 << 25
-        });
+    try {
+      console.log("SPOTIFY → downloading…");
 
-        stream
-          .pipe(fs.createWriteStream(outPath))
-          .on("finish", resolve)
-          .on("error", reject);
+      const track = await spot.downloadTrack(url); // Buffer
+      fs.writeFileSync(outPath, track);
+
+      console.log("SPOTIFY success");
+      return;
+    } catch (err) {
+      console.log("SPOTIFY error:", err.message);
+      throw new Error("Spotify download failed");
+    }
+  }
+
+  // ==========================
+  // YOUTUBE (yt-dlp-exec)
+  // ==========================
+  if (isYouTube(url)) {
+    try {
+      console.log("YTDLP → downloading…");
+
+      await ytdlp(url, {
+        extractAudio: true,
+        audioFormat: "mp3",
+        output: outPath,
+        noCheckCertificates: true,
+        noWarnings: true,
+        preferFreeFormats: true
       });
 
-      console.log("ENGINE 1 success (ytdl-core)");
+      console.log("YTDLP success");
       return;
+    } catch (err) {
+      console.log("YTDLP error:", err.message);
+      throw new Error("YouTube download failed");
     }
-  } catch (err) {
-    console.log("ENGINE 1 error:", err.message);
   }
 
-  await delay(350);
-
-  // ====================================================
-  // ENGINE 2 — YouTube Simplify API (Stable JSON API)
-  // ====================================================
-  try {
-    const api = `https://p.oceansaver.in/ajax/analyze?url=${encodeURIComponent(url)}&lang=en`;
-    const r = await axios.get(api);
-
-    const audios = r.data?.links?.audios;
-    if (Array.isArray(audios) && audios.length > 0) {
-      const link = audios[0].link;
-      const buff = await axios.get(link, { responseType: "arraybuffer" });
-      fs.writeFileSync(outPath, buff.data);
-
-      console.log("ENGINE 2 success (oceansaver)");
-      return;
-    }
-  } catch (err) {
-    console.log("ENGINE 2 error:", err.message);
-  }
-
-  await delay(350);
-
-  // ====================================================
-  // ENGINE 3 — SaveTube (Stable server-side engine)
-  // ====================================================
-  try {
-    const info = await axios.get(`https://api.savetube.me/info?url=${encodeURIComponent(url)}`);
-    const audio = info.data?.audios?.[0];
-
-    if (audio?.url) {
-      const buff = await axios.get(audio.url, { responseType: "arraybuffer" });
-      fs.writeFileSync(outPath, buff.data);
-
-      console.log("ENGINE 3 success (SaveTube)");
-      return;
-    }
-  } catch (err) {
-    console.log("ENGINE 3 error:", err.message);
-  }
-
-  await delay(350);
-
-  // ====================================================
-  // ENGINE 4 — YTGrab / Server-based converter
-  // ====================================================
-  try {
-    const api = `https://converter.download/api/v1/convert?url=${encodeURIComponent(url)}&format=mp3`;
-    const r = await axios.get(api);
-
-    if (r.data?.url) {
-      const buff = await axios.get(r.data.url, { responseType: "arraybuffer" });
-      fs.writeFileSync(outPath, buff.data);
-
-      console.log("ENGINE 4 success (converter.download)");
-      return;
-    }
-  } catch (err) {
-    console.log("ENGINE 4 error:", err.message);
-  }
-
-  await delay(350);
-
-  // ====================================================
-  // ENGINE 5 — yt5s (Correct FIXED Implementation)
-  // ====================================================
-  try {
-    // STEP 1 — Get video ID
-    const info = await axios.post(
-      "https://yt5s.io/api/ajaxSearch",
-      new URLSearchParams({ q: url, vt: "mp3" }),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-    );
-
-    const vid = info.data?.vid;
-    if (!vid) throw new Error("Invalid vid");
-
-    // STEP 2 — Request MP3 link
-    const conv = await axios.post(
-      "https://yt5s.io/api/ajaxConvert",
-      new URLSearchParams({ vid, k: info.data.links.mp3["128"].k }),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-    );
-
-    const dl = conv.data?.dlink;
-    if (dl) {
-      const buff = await axios.get(dl, { responseType: "arraybuffer" });
-      fs.writeFileSync(outPath, buff.data);
-
-      console.log("ENGINE 5 success (yt5s)");
-      return;
-    }
-  } catch (err) {
-    console.log("ENGINE 5 error:", err.message);
-  }
-
-  // ====================================================
-  // If ALL engines failed
-  // ====================================================
-  throw new Error("All 5 download engines failed.");
+  throw new Error("Unsupported URL");
 }
 
 module.exports = downloadAudio;
