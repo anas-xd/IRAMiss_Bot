@@ -1,5 +1,5 @@
 // ==================================================
-// MISS IRA BOT — FINAL INDEX.JS (CLEAN & STABLE)
+// MISS IRA BOT — FINAL INDEX.JS (YTDLP + SPOTIFY SAFE)
 // ==================================================
 
 const { Telegraf } = require("telegraf");
@@ -12,7 +12,7 @@ require("dotenv").config();
 // CONFIG
 const config = require("./config.json");
 
-// MAIN DOWNLOADER (must export function)
+// NEW DOWNLOADER (yt-dlp + spotifydl-core)
 const downloadAudio = require("./utils/download");
 
 // ==================================================
@@ -24,7 +24,9 @@ let mongoose, UserModel;
 if (process.env.MONGO_URI) {
   try {
     mongoose = require("mongoose");
-    mongoose.connect(process.env.MONGO_URI)
+
+    mongoose
+      .connect(process.env.MONGO_URI)
       .then(() => {
         console.log("🗄️ MongoDB connected");
         useMongo = true;
@@ -34,7 +36,7 @@ if (process.env.MONGO_URI) {
         useMongo = false;
       });
   } catch {
-    console.log("⚠️ mongoose missing → skipping Mongo");
+    console.log("⚠️ Missing mongoose → skipping database");
   }
 }
 
@@ -47,7 +49,7 @@ if (useMongo) {
     is_premium: Boolean,
     language_code: String,
     added_at: String,
-    last_active: String,
+    last_active: String
   });
 
   UserModel = mongoose.model("User", userSchema);
@@ -65,16 +67,19 @@ try {
 }
 
 // ==================================================
-// FILE-BASED USER DB (if Mongo disabled)
+// FILE-BASED USER DB (fallback)
 // ==================================================
 const DB_DIR = path.join(__dirname, "database");
 const DB_FILE = path.join(DB_DIR, "users.json");
 fs.ensureDirSync(DB_DIR);
 if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
 
-const loadUsers  = () => {
-  try { return JSON.parse(fs.readFileSync(DB_FILE)); }
-  catch { return []; }
+const loadUsers = () => {
+  try {
+    return JSON.parse(fs.readFileSync(DB_FILE));
+  } catch {
+    return [];
+  }
 };
 
 const saveUsers = data =>
@@ -86,11 +91,11 @@ const saveUsers = data =>
 const now = () =>
   moment().tz(config.timezone || "Asia/Dhaka").format("DD/MM/YYYY HH:mm:ss");
 
-const esc = txt =>
-  String(txt)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;");
+const esc = t =>
+  String(t)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
 // ==================================================
 // SAVE USER FUNCTION
@@ -107,18 +112,20 @@ async function saveUser(ctx) {
     is_premium: !!u.is_premium,
     language_code: u.language_code || "",
     added_at: now(),
-    last_active: now(),
+    last_active: now()
   };
 
   try {
     if (useMongo && UserModel) {
-      await UserModel.findOneAndUpdate({ id: item.id }, item, { upsert: true });
+      await UserModel.findOneAndUpdate({ id: item.id }, item, {
+        upsert: true
+      });
     } else {
       let list = loadUsers();
-      const exists = list.find(x => x.id === item.id);
+      const found = list.find(x => x.id === item.id);
 
-      if (!exists) list.push(item);
-      else exists.last_active = now();
+      if (!found) list.push(item);
+      else found.last_active = now();
 
       saveUsers(list);
     }
@@ -132,13 +139,11 @@ async function saveUser(ctx) {
 // ==================================================
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!TOKEN) {
-  console.log("❌ TELEGRAM_BOT_TOKEN missing!");
+  console.log("❌ Missing TELEGRAM_BOT_TOKEN");
   process.exit(1);
 }
 
 const bot = new Telegraf(TOKEN);
-
-// Bot memory
 global.commands = new Map();
 global.songSessions = {};
 
@@ -151,14 +156,10 @@ fs.ensureDirSync(CMD_DIR);
 for (const file of fs.readdirSync(CMD_DIR)) {
   if (!file.endsWith(".js")) continue;
 
-  try {
-    const cmd = require(path.join(CMD_DIR, file));
-    if (cmd.name && cmd.run) {
-      global.commands.set(config.prefix + cmd.name, cmd);
-      console.log("✅ Loaded command:", cmd.name);
-    }
-  } catch (err) {
-    console.log("⚠️ Failed to load:", file, err.message);
+  const cmd = require(path.join(CMD_DIR, file));
+  if (cmd.name && cmd.run) {
+    global.commands.set(config.prefix + cmd.name, cmd);
+    console.log("✅ Loaded command:", cmd.name);
   }
 }
 
@@ -167,6 +168,7 @@ for (const file of fs.readdirSync(CMD_DIR)) {
 // ==================================================
 bot.start(async ctx => {
   await saveUser(ctx);
+
   const name = ctx.from?.first_name || "User";
 
   const text = lang.startMessage
@@ -181,28 +183,25 @@ bot.start(async ctx => {
 // ==================================================
 bot.on("text", async ctx => {
   try {
-    const txt = (ctx.message.text || "").trim();
+    const txt = ctx.message.text.trim();
     if (!txt.startsWith(config.prefix)) return;
 
     await saveUser(ctx);
 
     const parts = txt.slice(config.prefix.length).trim().split(/\s+/);
-    const cmd = parts.shift();
-    const args = parts;
+    const cmd = global.commands.get(config.prefix + parts[0]);
 
-    const handler = global.commands.get(config.prefix + cmd);
-    if (!handler) return ctx.reply("❌ Unknown command");
+    if (!cmd) return ctx.reply("❌ Unknown command");
 
-    await handler.run(ctx, args);
-
+    await cmd.run(ctx, parts.slice(1));
   } catch (err) {
-    console.log("❌ text handler error:", err.message);
-    ctx.reply("⚠️ Something went wrong.");
+    console.log("❌ text handler:", err.message);
+    ctx.reply("⚠️ Error occurred");
   }
 });
 
 // ==================================================
-// CALLBACK HANDLER (SONG SYSTEM)
+// CALLBACK HANDLER (Download song)
 // ==================================================
 bot.on("callback_query", async ctx => {
   try {
@@ -215,67 +214,51 @@ bot.on("callback_query", async ctx => {
     const me = String(ctx.from.id);
 
     if (uid !== me)
-      return ctx.answerCbQuery("Not your menu!", { show_alert: true });
+      return ctx.answerCbQuery("❌ Not your menu!", { show_alert: true });
 
     const session = global.songSessions[uid];
     if (!session)
-      return ctx.answerCbQuery("Session expired!", { show_alert: true });
+      return ctx.answerCbQuery("❌ Session expired!", { show_alert: true });
 
     if (action === "song_cancel") {
       delete global.songSessions[uid];
-      try { await ctx.editMessageReplyMarkup(); } catch {}
+      try {
+        await ctx.editMessageReplyMarkup();
+      } catch {}
       return ctx.reply("❌ Cancelled");
     }
 
     if (action === "song_play") {
-      const i = Number(index);
-      const video = session.videos[i];
+      const video = session.videos[index];
       if (!video) return;
 
-      try { await ctx.editMessageReplyMarkup(); } catch {}
+      await ctx.reply(`⏳ Preparing: <b>${esc(video.title)}</b>`, {
+        parse_mode: "HTML"
+      });
 
-      await ctx.reply(
-        `⏳ Preparing: <b>${esc(video.title)}</b>`,
-        { parse_mode: "HTML" }
-      );
-
-      // DOWNLOAD → multi-engine
       const filename = `dl_${uid}_${Date.now()}.mp3`;
       const filepath = path.join(__dirname, "tmp", filename);
 
       try {
         await downloadAudio(video.url, filepath);
 
-        if (video.thumbnail) {
-          await ctx.replyWithPhoto(
-            { url: video.thumbnail },
-            {
-              caption: `<b>${esc(video.title)}</b>\n🎤 ${esc(video.author)}`,
-              parse_mode: "HTML"
-            }
-          );
-        }
-
         await ctx.replyWithAudio(
           { source: fs.createReadStream(filepath) },
-          {
-            title: video.title,
-            performer: video.author || ""
-          }
+          { title: video.title, performer: video.author }
         );
-
       } catch (err) {
-        console.log("❌ DOWNLOAD ERROR:", err.message);
-        await ctx.reply("❌ Failed to download from all engines.");
+        console.log("❌ DOWNLOAD:", err.message);
+        await ctx.reply("❌ Download failed");
       }
 
-      try { fs.unlinkSync(filepath); } catch {}
+      try {
+        fs.unlinkSync(filepath);
+      } catch {}
 
       return;
     }
   } catch (err) {
-    console.log("❌ callback error:", err.message);
-    ctx.answerCbQuery("Error!", { show_alert: true });
+    console.log("❌ callback:", err.message);
   }
 });
 
@@ -285,14 +268,12 @@ bot.on("callback_query", async ctx => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) =>
-  res.send(`<h2>${config.botname}</h2><p>Bot running</p>`)
-);
+app.get("/", (req, res) => {
+  res.send(`<h2>${config.botname}</h2><p>Bot is running.</p>`);
+});
 
 app.get("/status", async (req, res) => {
-  let total = 0;
-  if (useMongo && UserModel) total = await UserModel.countDocuments();
-  else total = loadUsers().length;
+  let total = useMongo ? await UserModel.countDocuments() : loadUsers().length;
 
   res.send(`
     <h1>${esc(config.botname)} Status</h1>
@@ -302,17 +283,17 @@ app.get("/status", async (req, res) => {
 });
 
 // ==================================================
-// RUN BOT (WEBHOOK OR POLLING)
+// RUN BOT (WEBHOOK/POLLING)
 // ==================================================
 (async () => {
-  const external = process.env.RENDER_EXTERNAL_URL || process.env.EXTERNAL_URL;
+  const ext = process.env.RENDER_EXTERNAL_URL || process.env.EXTERNAL_URL;
   const hook = `/bot${TOKEN}`;
 
   try {
-    if (external) {
-      await bot.telegram.setWebhook(external + hook);
+    if (ext) {
+      await bot.telegram.setWebhook(ext + hook);
       app.use(bot.webhookCallback(hook));
-      console.log("🚀 Webhook mode:", external + hook);
+      console.log("🚀 Webhook mode:", ext + hook);
     } else {
       await bot.launch();
       console.log("🚀 Polling mode");
@@ -324,5 +305,5 @@ app.get("/status", async (req, res) => {
 })();
 
 app.listen(PORT, () =>
-  console.log(`🌍 Web dashboard running → PORT ${PORT}`)
+  console.log(`🌍 Dashboard running → PORT ${PORT}`)
 );
