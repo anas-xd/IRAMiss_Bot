@@ -1,107 +1,113 @@
 // commands/song.js
 const yts = require("yt-search");
 const ytdl = require("ytdl-core");
-const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
+const axios = require("axios");
 
-// NOTE: This file expects index.js to register
-//  - a callback_query handler that handles callback_data starting with "song_"
-//  - a text-number handler (1-5) that triggers selection if user replies with a number
-//
-// I'll include the index.js snippets below — add them where your bot handlers are defined.
-
-const TMP_DIR = path.join(__dirname, "..", "tmp");
-fs.ensureDirSync(TMP_DIR);
-
-// Per-user search storage (kept in memory)
-global.songResults = global.songResults || {};
+// tmp dir for downloads
+const TMP = path.join(__dirname, "..", "tmp");
+fs.ensureDirSync(TMP);
 
 async function getSpotifyMeta(title) {
-  // optional: search spotify if credentials provided
-  const clientId = process.env.SPOTIFY_ID;
-  const clientSecret = process.env.SPOTIFY_SECRET;
-  if (!clientId || !clientSecret) return null;
-
+  const id = process.env.SPOTIFY_ID;
+  const secret = process.env.SPOTIFY_SECRET;
+  if (!id || !secret) return null;
   try {
     const SpotifyWebApi = require("spotify-web-api-node");
-    const spotify = new SpotifyWebApi({ clientId, clientSecret });
+    const spotify = new SpotifyWebApi({ clientId: id, clientSecret: secret });
     const token = (await spotify.clientCredentialsGrant()).body.access_token;
     spotify.setAccessToken(token);
-
     const res = await spotify.searchTracks(title, { limit: 1 });
     if (res.body.tracks.items.length === 0) return null;
-    const track = res.body.tracks.items[0];
-
+    const t = res.body.tracks.items[0];
     return {
-      artist: track.artists.map(a => a.name).join(", "),
-      album: track.album.name,
-      release_date: track.album.release_date,
-      popularity: track.popularity,
-      spotify_url: track.external_urls.spotify,
-      album_image: track.album.images?.[0]?.url || null
+      artist: t.artists.map(a => a.name).join(", "),
+      album: t.album.name,
+      release_date: t.album.release_date,
+      popularity: t.popularity,
+      album_image: t.album.images?.[0]?.url || null,
+      spotify_url: t.external_urls?.spotify || null
     };
   } catch (e) {
-    console.warn("Spotify metadata error:", e?.message || e);
+    // ignore spotify errors
     return null;
   }
 }
 
+function escapeHtml(s = "") {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
 module.exports = {
   name: "song",
-  description: "Search song on YouTube (and Spotify metadata). Usage: /song <name>",
+  description: "Search a song on YouTube (and Spotify meta) and download audio. Usage: /song <name>",
   cooldown: 3,
+
   run: async (ctx, args) => {
+    const query = args.join(" ").trim();
+    if (!query) return ctx.reply("🎵 Use: /song <song name>");
+
+    // 1) initial temporary message
+    const searching = await ctx.reply(`⏳ Searching for: <b>${escapeHtml(query)}</b>`, { parse_mode: "HTML" });
+
     try {
-      const query = args && args.length ? args.join(" ") : null;
-      if (!query) return ctx.reply("🎵 Please provide a song name. Example: `/song shape of you`");
+      // 2) YouTube search (yt-search)
+      const sr = await yts(query);
+      const videos = (sr && sr.videos) ? sr.videos.slice(0, 5) : [];
 
-      await ctx.reply(`🔎 Searching for: <b>${query}</b>`, { parse_mode: "HTML" });
+      if (!videos.length) {
+        return ctx.editMessageText
+          ? ctx.editMessageText("❌ No results found.", { chat_id: searching.chat.id, message_id: searching.message_id })
+          : ctx.reply("❌ No results found.");
+      }
 
-      const res = await yts(query);
-      const videos = (res && res.videos) ? res.videos.slice(0, 5) : [];
-
-      if (!videos.length) return ctx.reply("❌ No results found for that query.");
-
-      // store per-user
+      // store session globally by user id (so callback handler knows)
       const uid = String(ctx.from.id);
-      global.songResults[uid] = videos;
+      global.songSessions = global.songSessions || {};
+      global.songSessions[uid] = { query, videos, createdAt: Date.now() };
 
-      // Build list message
-      let listMsg = `🎶 <b>Search results for:</b> <i>${query}</i>\n\n`;
+      // build the message text
+      let msg = `🎵 <b>Showing results for:</b> <i>${escapeHtml(query)}</i>\n\n`;
       videos.forEach((v, i) => {
-        listMsg += `<b>${i + 1}.</b> ${escapeHtml(v.title)}\n`;
-        listMsg += `⏱ ${v.timestamp} • 👁 ${v.views.toLocaleString()} • ${escapeHtml(v.author.name)}\n\n`;
+        msg += `<b>${i+1}.</b> ${escapeHtml(v.title)}\n⏱ ${v.timestamp} • 👁 ${v.views.toLocaleString()} • ${escapeHtml(v.author.name)}\n\n`;
       });
 
-      // Inline keyboard: select 1..N
-      const rows = videos.map((v, i) => [{ text: `${i + 1}. ${truncate(v.title, 40)}`, callback_data: `song_select:${uid}:${i}` }]);
-      // add a cancel row
-      rows.push([{ text: "Cancel ❌", callback_data: `song_cancel:${uid}` }]);
-
-      await ctx.replyWithHTML(listMsg, {
-        reply_markup: {
-          inline_keyboard: rows
+      // create grid inline keyboard (Option 3: Advanced Grid with titles)
+      // We'll make 2 columns per row where possible
+      const keyboard = { inline_keyboard: [] };
+      for (let i = 0; i < videos.length; i += 2) {
+        const row = [];
+        // left
+        const left = videos[i];
+        row.push({
+          text: `🎵 ${i+1}. ${left.title.length > 30 ? left.title.slice(0,27)+"…" : left.title}`,
+          callback_data: `song_play:${uid}:${i}`
+        });
+        // right (if exists)
+        if (i + 1 < videos.length) {
+          const right = videos[i+1];
+          row.push({
+            text: `🎵 ${i+2}. ${right.title.length > 30 ? right.title.slice(0,27)+"…" : right.title}`,
+            callback_data: `song_play:${uid}:${i+1}`
+          });
         }
+        keyboard.inline_keyboard.push(row);
+      }
+      // final row: cancel
+      keyboard.inline_keyboard.push([{ text: "Cancel ❌", callback_data: `song_cancel:${uid}` }]);
+
+      // 3) edit previous message to show results + buttons
+      await ctx.telegram.editMessageText(searching.chat.id, searching.message_id, null, msg, {
+        parse_mode: "HTML",
+        reply_markup: keyboard
       });
-
-      // note: user can also reply with a number (1-5) — index.js snippet handles that
-    } catch (err) {
-      console.error("song.run error:", err);
-      ctx.reply("⚠️ Something went wrong while searching.");
+    } catch (e) {
+      console.error("song.run error:", e);
+      try { await ctx.telegram.editMessageText(searching.chat.id, searching.message_id, null, "⚠️ Search failed."); } catch {}
     }
-  }
-};
+  },
 
-// helpers
-function truncate(s, n) {
-  if (!s) return "";
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
-function escapeHtml(text) {
-  if (!text) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+  // export helper for callback handler use
+  getSpotifyMeta
+};
