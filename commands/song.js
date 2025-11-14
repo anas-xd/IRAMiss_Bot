@@ -1,169 +1,157 @@
-// ==========================================
-// commands/song.js — FINAL CLEAN REBUILD
-// ==========================================
+// =======================================================
+// commands/song.js — FINAL ULTRA CLEAN REBUILD (2025)
+// Compatible with 5-engine downloader
+// =======================================================
 
 const yts = require("yt-search");
+const downloadAudio = require("../utils/download");
 const fs = require("fs-extra");
 const path = require("path");
 
-// TMP DIRECTORY FOR LATER DOWNLOAD USE
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
 
-// ==========================================
-// OPTIONAL SPOTIFY METADATA FETCHER
-// ==========================================
-async function getSpotifyMeta(title) {
-  const ID = process.env.SPOTIFY_ID;
-  const SECRET = process.env.SPOTIFY_SECRET;
-  if (!ID || !SECRET) return null;
-
-  try {
-    const SpotifyWebApi = require("spotify-web-api-node");
-    const api = new SpotifyWebApi({
-      clientId: ID,
-      clientSecret: SECRET
-    });
-
-    const token = (await api.clientCredentialsGrant()).body.access_token;
-    api.setAccessToken(token);
-
-    const res = await api.searchTracks(title, { limit: 1 });
-    if (!res.body.tracks.items.length) return null;
-
-    const t = res.body.tracks.items[0];
-    return {
-      artist: t.artists.map(a => a.name).join(", "),
-      album: t.album.name,
-      release_date: t.album.release_date,
-      popularity: t.popularity,
-      album_image: t.album.images?.[0]?.url || null,
-      spotify_url: t.external_urls?.spotify || null
-    };
-  } catch (e) {
-    return null;
-  }
-}
-
-// Escape HTML
-const esc = s =>
+// Escape HTML safely
+const esc = (s = "") =>
   String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-// ==========================================
-// MAIN EXPORT
-// ==========================================
+// =======================================================
+// OPTIONAL SPOTIFY ENRICH DATA
+// =======================================================
+async function getSpotifyInfo(title) {
+  try {
+    const ID = process.env.SPOTIFY_ID;
+    const SECRET = process.env.SPOTIFY_SECRET;
+    if (!ID || !SECRET) return null;
+
+    const SpotifyAPI = require("spotify-web-api-node");
+    const api = new SpotifyAPI({ clientId: ID, clientSecret: SECRET });
+
+    const token = (await api.clientCredentialsGrant()).body.access_token;
+    api.setAccessToken(token);
+
+    const data = await api.searchTracks(title, { limit: 1 });
+    if (!data.body.tracks.items.length) return null;
+
+    const s = data.body.tracks.items[0];
+    return {
+      artist: s.artists.map(a => a.name).join(", "),
+      album: s.album.name,
+      release: s.album.release_date,
+      cover: s.album.images?.[0]?.url || null,
+      url: s.external_urls?.spotify || null
+    };
+  } catch {
+    return null;
+  }
+}
+
+// =======================================================
+// EXPORT COMMAND
+// =======================================================
 module.exports = {
   name: "song",
-  description: "Search and download any song",
-  cooldown: 3,
+  description: "Search YouTube & download any song.",
+  cooldown: 2,
 
-  // ======================================
-  // /song command
-  // ======================================
   run: async (ctx, args) => {
     const query = args.join(" ").trim();
     if (!query) return ctx.reply("🎵 Use: /song <song name>");
 
-    // Show temporary “searching” message
-    const searching = await ctx.reply(
-      `⏳ Searching for: <b>${esc(query)}</b>`,
-      { parse_mode: "HTML" }
-    );
+    // Temporary message
+    const msg = await ctx.reply(`⏳ Searching for <b>${esc(query)}</b>...`, {
+      parse_mode: "HTML",
+    });
 
     try {
-      // =========================
-      // 1) YOUTUBE SEARCH
-      // =========================
-      const result = await yts(query);
-      const videos = result?.videos?.slice(0, 6) || [];
+      // ---------------------------------------------------
+      // 1) Search YouTube
+      // ---------------------------------------------------
+      const r = await yts(query);
+      const videos = r?.videos?.slice(0, 6) || [];
 
       if (!videos.length) {
         return ctx.telegram.editMessageText(
-          searching.chat.id,
-          searching.message_id,
+          msg.chat.id,
+          msg.message_id,
           null,
-          "❌ No results found."
+          "❌ No result found.",
         );
       }
 
-      // =========================
-      // 2) SAVE TEMP SESSION
-      // =========================
+      // ---------------------------------------------------
+      // 2) Save user search session
+      // ---------------------------------------------------
       const uid = String(ctx.from.id);
-      global.songSessions = global.songSessions || {};
       global.songSessions[uid] = {
-        query,
         videos,
-        createdAt: Date.now()
+        createdAt: Date.now(),
       };
 
-      // =========================
-      // 3) RESULT TEXT FORMAT
-      // =========================
-      let text = `🎵 <b>Showing results for:</b> <i>${esc(query)}</i>\n\n`;
+      // ---------------------------------------------------
+      // 3) Clean result text
+      // ---------------------------------------------------
+      let txt = `🎵 <b>Results for:</b> <i>${esc(query)}</i>\n\n`;
 
       videos.forEach((v, i) => {
-        text += `<b>${i + 1}.</b> ${esc(v.title)}\n`;
-        text += `⏱ ${v.timestamp} • 👁 ${v.views.toLocaleString()} • ${esc(v.author.name)}\n\n`;
+        txt += `<b>${i + 1}.</b> ${esc(v.title)}\n`;
+        txt += `⏱ ${v.timestamp} • 👁 ${v.views.toLocaleString()} • ${esc(
+          v.author.name
+        )}\n\n`;
       });
 
-      // =========================
-      // 4) GRID INLINE BUTTONS
-      // =========================
-      const kb = { inline_keyboard: [] };
-
+      // ---------------------------------------------------
+      // 4) Inline Buttons (2 per row)
+      // ---------------------------------------------------
+      const kb = [];
       for (let i = 0; i < videos.length; i += 2) {
-        let row = [];
+        const row = [];
 
         const v1 = videos[i];
         row.push({
-          text: `🎵 ${i + 1}. ${v1.title.length > 28 ? v1.title.slice(0, 25) + "…" : v1.title}`,
-          callback_data: `song_play:${uid}:${i}`
+          text: `🎵 ${i + 1}`,
+          callback_data: `song_play:${uid}:${i}`,
         });
 
         if (videos[i + 1]) {
-          const v2 = videos[i + 1];
           row.push({
-            text: `🎵 ${i + 2}. ${v2.title.length > 28 ? v2.title.slice(0, 25) + "…" : v2.title}`,
-            callback_data: `song_play:${uid}:${i + 1}`
+            text: `🎵 ${i + 2}`,
+            callback_data: `song_play:${uid}:${i + 1}`,
           });
         }
 
-        kb.inline_keyboard.push(row);
+        kb.push(row);
       }
 
-      kb.inline_keyboard.push([
-        { text: "❌ Cancel", callback_data: `song_cancel:${uid}` }
-      ]);
+      kb.push([{ text: "❌ Cancel", callback_data: `song_cancel:${uid}` }]);
 
-      // =========================
-      // 5) EDIT UI TO RESULTS
-      // =========================
+      // ---------------------------------------------------
+      // 5) Edit message into full result UI
+      // ---------------------------------------------------
       await ctx.telegram.editMessageText(
-        searching.chat.id,
-        searching.message_id,
+        msg.chat.id,
+        msg.message_id,
         null,
-        text,
+        txt,
         {
           parse_mode: "HTML",
-          reply_markup: kb
+          reply_markup: { inline_keyboard: kb },
         }
       );
     } catch (err) {
-      console.log("❌ song.js error:", err);
+      console.log("song.js error:", err.message);
+
       try {
         await ctx.telegram.editMessageText(
-          searching.chat.id,
-          searching.message_id,
+          msg.chat.id,
+          msg.message_id,
           null,
           "⚠️ Search failed."
         );
       } catch {}
     }
   },
-
-  getSpotifyMeta
 };
