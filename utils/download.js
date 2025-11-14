@@ -1,37 +1,51 @@
 // =========================================================
-// utils/download.js — YTDLP only (Spotify metadata allowed)
+// utils/download.js — YTDLP + Spotify (Render Safe)
 // =========================================================
 
 const fs = require("fs-extra");
 const path = require("path");
-const { ytdlp } = require("yt-dlp-exec");
+const ytdlp = require("yt-dlp-exec"); // ✅ FIXED
+const Spotify = require("@nechlophomeriaa/spotifydl").default;
 
-// TMP folder
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
 
-// URL detectors
-const isYouTube = url =>
-  /(youtube\.com|youtu\.be)/i.test(url);
+// Spotify client
+let spot = null;
+if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
+  spot = new Spotify({
+    clientId: process.env.SPOTIFY_ID,
+    clientSecret: process.env.SPOTIFY_SECRET,
+  });
+}
 
-const isSpotify = url =>
-  /open\.spotify\.com\/track/i.test(url);
+// URL detectors
+const isYouTube = (url) => /(youtube\.com|youtu\.be)/i.test(url);
+const isSpotify = (url) => /open\.spotify\.com\/(track)/i.test(url);
 
 // MAIN FUNCTION
 async function downloadAudio(url, outPath) {
-
-  // ==================================================
-  // SPOTIFY (metadata only — NO DOWNLOAD)
-  // ==================================================
+  // ==========================
+  // SPOTIFY
+  // ==========================
   if (isSpotify(url)) {
-    throw new Error(
-      "Spotify audio download disabled. Use metadata only."
-    );
+    if (!spot) throw new Error("Spotify keys missing");
+
+    try {
+      console.log("SPOTIFY → downloading…");
+      const track = await spot.downloadTrack(url); // Buffer
+      fs.writeFileSync(outPath, track);
+      console.log("SPOTIFY success");
+      return;
+    } catch (err) {
+      console.log("SPOTIFY error:", err.message);
+      throw new Error("Spotify download failed");
+    }
   }
 
-  // ==================================================
-  // YOUTUBE DOWNLOAD (yt-dlp-exec)
-  // ==================================================
+  // ==========================
+  // YOUTUBE (yt-dlp-exec)
+  // ==========================
   if (isYouTube(url)) {
     try {
       console.log("YTDLP → downloading…");
@@ -42,7 +56,7 @@ async function downloadAudio(url, outPath) {
         output: outPath,
         noCheckCertificates: true,
         noWarnings: true,
-        preferFreeFormats: true
+        preferFreeFormats: true,
       });
 
       console.log("YTDLP success");
