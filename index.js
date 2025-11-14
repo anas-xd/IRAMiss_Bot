@@ -1,5 +1,5 @@
 // ==================================================
-// MISS IRA BOT — FINAL INDEX.JS (5-ENGINE SONG BOT)
+// MISS IRA BOT — FINAL INDEX.JS (CLEAN & STABLE)
 // ==================================================
 
 const { Telegraf } = require("telegraf");
@@ -7,13 +7,12 @@ const fs = require("fs-extra");
 const path = require("path");
 const express = require("express");
 const moment = require("moment-timezone");
-const axios = require("axios");
 require("dotenv").config();
 
 // CONFIG
 const config = require("./config.json");
 
-// DOWNLOAD ENGINE
+// MAIN DOWNLOADER (must export function)
 const downloadAudio = require("./utils/download");
 
 // ==================================================
@@ -25,20 +24,17 @@ let mongoose, UserModel;
 if (process.env.MONGO_URI) {
   try {
     mongoose = require("mongoose");
-    useMongo = true;
-
-    mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    })
-    .then(() => console.log("🗄️ MongoDB connected"))
-    .catch((e) => {
-      console.log("❌ Mongo error:", e.message);
-      useMongo = false;
-    });
-
+    mongoose.connect(process.env.MONGO_URI)
+      .then(() => {
+        console.log("🗄️ MongoDB connected");
+        useMongo = true;
+      })
+      .catch(err => {
+        console.log("❌ Mongo error:", err.message);
+        useMongo = false;
+      });
   } catch {
-    console.log("⚠️ mongoose missing — skipping Mongo");
+    console.log("⚠️ mongoose missing → skipping Mongo");
   }
 }
 
@@ -51,79 +47,80 @@ if (useMongo) {
     is_premium: Boolean,
     language_code: String,
     added_at: String,
-    last_active: String
+    last_active: String,
   });
 
   UserModel = mongoose.model("User", userSchema);
 }
 
 // ==================================================
-// LANGUAGE LOADER
+// LANGUAGE
 // ==================================================
 let lang;
 try {
   lang = require(`./languages/${config.language}.lang.js`);
-} catch (err) {
+} catch {
   lang = require("./languages/en.lang.js");
-  console.log("⚠️ Language fallback → EN");
+  console.log("⚠️ Language fallback → English");
 }
 
 // ==================================================
-// FILE DB
+// FILE-BASED USER DB (if Mongo disabled)
 // ==================================================
 const DB_DIR = path.join(__dirname, "database");
 const DB_FILE = path.join(DB_DIR, "users.json");
-
 fs.ensureDirSync(DB_DIR);
 if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
 
-function loadUsers() {
-  try { return JSON.parse(fs.readFileSync(DB_FILE, "utf8")); }
+const loadUsers  = () => {
+  try { return JSON.parse(fs.readFileSync(DB_FILE)); }
   catch { return []; }
-}
+};
 
-function saveUsers(arr) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(arr, null, 2));
-}
+const saveUsers = data =>
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
 // ==================================================
 // HELPERS
 // ==================================================
-const now = () => moment().tz(config.timezone || "Asia/Dhaka").format("DD/MM/YYYY HH:mm:ss");
+const now = () =>
+  moment().tz(config.timezone || "Asia/Dhaka").format("DD/MM/YYYY HH:mm:ss");
 
-const escape = (s="") =>
-  String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const esc = txt =>
+  String(txt)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
 
 // ==================================================
-// SAVE USER
+// SAVE USER FUNCTION
 // ==================================================
 async function saveUser(ctx) {
+  const u = ctx.from;
+  if (!u || !u.id) return;
+
+  const item = {
+    id: String(u.id),
+    first_name: u.first_name || "",
+    last_name: u.last_name || "",
+    username: u.username ? "@" + u.username : "",
+    is_premium: !!u.is_premium,
+    language_code: u.language_code || "",
+    added_at: now(),
+    last_active: now(),
+  };
+
   try {
-    if (!ctx.from?.id) return;
-
-    const u = ctx.from;
-
-    const data = {
-      id: String(u.id),
-      first_name: u.first_name || "",
-      last_name: u.last_name || "",
-      username: u.username ? `@${u.username}` : "",
-      is_premium: !!u.is_premium,
-      language_code: u.language_code || "",
-      added_at: now(),
-      last_active: now()
-    };
-
     if (useMongo && UserModel) {
-      await UserModel.findOneAndUpdate({ id: data.id }, data, { upsert: true });
+      await UserModel.findOneAndUpdate({ id: item.id }, item, { upsert: true });
     } else {
-      const users = loadUsers();
-      const exists = users.find(x => x.id === data.id);
+      let list = loadUsers();
+      const exists = list.find(x => x.id === item.id);
 
-      if (!exists) users.push(data);
+      if (!exists) list.push(item);
       else exists.last_active = now();
 
-      saveUsers(users);
+      saveUsers(list);
     }
   } catch (err) {
     console.log("❌ saveUser:", err.message);
@@ -141,70 +138,66 @@ if (!TOKEN) {
 
 const bot = new Telegraf(TOKEN);
 
+// Bot memory
 global.commands = new Map();
-global.songSessions = {}; // { userId: { videos, createdAt } }
+global.songSessions = {};
 
 // ==================================================
 // LOAD COMMANDS
 // ==================================================
-const COMMANDS_DIR = path.join(__dirname, "commands");
-fs.ensureDirSync(COMMANDS_DIR);
+const CMD_DIR = path.join(__dirname, "commands");
+fs.ensureDirSync(CMD_DIR);
 
-fs.readdirSync(COMMANDS_DIR).forEach(file => {
-  if (!file.endsWith(".js")) return;
+for (const file of fs.readdirSync(CMD_DIR)) {
+  if (!file.endsWith(".js")) continue;
 
   try {
-    const cmd = require(path.join(COMMANDS_DIR, file));
-    if (cmd?.name && cmd?.run) {
+    const cmd = require(path.join(CMD_DIR, file));
+    if (cmd.name && cmd.run) {
       global.commands.set(config.prefix + cmd.name, cmd);
-      console.log("✅ Command loaded:", cmd.name);
+      console.log("✅ Loaded command:", cmd.name);
     }
   } catch (err) {
-    console.log("⚠️ Failed to load", file, err.message);
+    console.log("⚠️ Failed to load:", file, err.message);
   }
-});
+}
 
 // ==================================================
-// START COMMAND
+// /start
 // ==================================================
 bot.start(async ctx => {
   await saveUser(ctx);
   const name = ctx.from?.first_name || "User";
 
-  const welcome = lang.startMessage
+  const text = lang.startMessage
     ? lang.startMessage(name, config.botname, config.prefix)
-    : `👋 Hello ${name}! Use ${config.prefix}help`;
+    : `👋 Hello ${name}!`;
 
-  return ctx.reply(welcome, { parse_mode: "Markdown" });
+  return ctx.reply(text, { parse_mode: "Markdown" });
 });
 
 // ==================================================
-// MESSAGE HANDLER (PREFIX)
+// MAIN TEXT HANDLER
 // ==================================================
 bot.on("text", async ctx => {
   try {
-    const txt = ctx.message?.text?.trim() || "";
+    const txt = (ctx.message.text || "").trim();
     if (!txt.startsWith(config.prefix)) return;
 
     await saveUser(ctx);
 
     const parts = txt.slice(config.prefix.length).trim().split(/\s+/);
-    const cmdName = parts.shift();
+    const cmd = parts.shift();
     const args = parts;
 
-    if (!cmdName) {
-      const defCmd = global.commands.get(config.prefix + "help");
-      return defCmd ? defCmd.run(ctx, args) : ctx.reply("Use /help");
-    }
+    const handler = global.commands.get(config.prefix + cmd);
+    if (!handler) return ctx.reply("❌ Unknown command");
 
-    const command = global.commands.get(config.prefix + cmdName);
-    if (!command) return ctx.reply("❌ Unknown command");
+    await handler.run(ctx, args);
 
-    await command.run(ctx, args);
-
-  } catch (e) {
-    console.log("❌ Handler error:", e.message);
-    ctx.reply("⚠️ Error occurred.");
+  } catch (err) {
+    console.log("❌ text handler error:", err.message);
+    ctx.reply("⚠️ Something went wrong.");
   }
 });
 
@@ -213,67 +206,76 @@ bot.on("text", async ctx => {
 // ==================================================
 bot.on("callback_query", async ctx => {
   try {
-    const data = ctx.callbackQuery?.data;
+    const data = ctx.callbackQuery.data;
     if (!data) return;
 
     await ctx.answerCbQuery();
-    const [action, uid, index] = data.split(":");
-    const caller = String(ctx.from?.id);
 
-    if (uid !== caller)
+    const [action, uid, index] = data.split(":");
+    const me = String(ctx.from.id);
+
+    if (uid !== me)
       return ctx.answerCbQuery("Not your menu!", { show_alert: true });
 
     const session = global.songSessions[uid];
-    if (!session) {
+    if (!session)
       return ctx.answerCbQuery("Session expired!", { show_alert: true });
-    }
 
     if (action === "song_cancel") {
       delete global.songSessions[uid];
-      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {}
+      try { await ctx.editMessageReplyMarkup(); } catch {}
       return ctx.reply("❌ Cancelled");
     }
 
-    const i = parseInt(index);
-    const video = session.videos[i];
-    if (!video) return ctx.answerCbQuery("Invalid selection!");
-
     if (action === "song_play") {
-      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {}
+      const i = Number(index);
+      const video = session.videos[i];
+      if (!video) return;
 
-      await ctx.reply(`⏳ Preparing ${escape(video.title)}...`, { parse_mode: "HTML" });
+      try { await ctx.editMessageReplyMarkup(); } catch {}
 
-      const outPath = path.join(__dirname, "tmp", `dl_${uid}_${Date.now()}.mp3`);
+      await ctx.reply(
+        `⏳ Preparing: <b>${esc(video.title)}</b>`,
+        { parse_mode: "HTML" }
+      );
+
+      // DOWNLOAD → multi-engine
+      const filename = `dl_${uid}_${Date.now()}.mp3`;
+      const filepath = path.join(__dirname, "tmp", filename);
+
       try {
-        await downloadAudio(video.url, outPath);
+        await downloadAudio(video.url, filepath);
 
         if (video.thumbnail) {
           await ctx.replyWithPhoto(
             { url: video.thumbnail },
             {
-              caption: `<b>${escape(video.title)}</b>\n🎤 ${escape(video.author || "")}`,
+              caption: `<b>${esc(video.title)}</b>\n🎤 ${esc(video.author)}`,
               parse_mode: "HTML"
             }
           );
         }
 
         await ctx.replyWithAudio(
-          { source: fs.createReadStream(outPath) },
-          { title: video.title, performer: video.author || "" }
+          { source: fs.createReadStream(filepath) },
+          {
+            title: video.title,
+            performer: video.author || ""
+          }
         );
 
       } catch (err) {
-        console.log("❌ FINAL DOWNLOAD ERROR:", err.message);
+        console.log("❌ DOWNLOAD ERROR:", err.message);
         await ctx.reply("❌ Failed to download from all engines.");
       }
 
-      try { fs.unlinkSync(outPath); } catch {}
+      try { fs.unlinkSync(filepath); } catch {}
+
       return;
     }
-
   } catch (err) {
     console.log("❌ callback error:", err.message);
-    ctx.answerCbQuery("Error!");
+    ctx.answerCbQuery("Error!", { show_alert: true });
   }
 });
 
@@ -283,12 +285,9 @@ bot.on("callback_query", async ctx => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(__dirname));
-
-app.get("/", (req, res) => {
-  const users = loadUsers();
-  res.send(`<h2>${config.botname}</h2><p>Users: ${users.length}</p>`);
-});
+app.get("/", (req, res) =>
+  res.send(`<h2>${config.botname}</h2><p>Bot running</p>`)
+);
 
 app.get("/status", async (req, res) => {
   let total = 0;
@@ -296,32 +295,34 @@ app.get("/status", async (req, res) => {
   else total = loadUsers().length;
 
   res.send(`
-    <h1>${escape(config.botname)} Status</h1>
+    <h1>${esc(config.botname)} Status</h1>
     <p>Time: ${now()}</p>
     <p>Users: ${total}</p>
   `);
 });
 
 // ==================================================
-// WEBHOOK OR POLLING
+// RUN BOT (WEBHOOK OR POLLING)
 // ==================================================
 (async () => {
-  const external = process.env.RENDER_EXTERNAL_URL || process.env.EXTERNAL_URL || "";
+  const external = process.env.RENDER_EXTERNAL_URL || process.env.EXTERNAL_URL;
   const hook = `/bot${TOKEN}`;
 
   try {
     if (external) {
       await bot.telegram.setWebhook(external + hook);
       app.use(bot.webhookCallback(hook));
-      console.log("🚀 Webhook:", external + hook);
+      console.log("🚀 Webhook mode:", external + hook);
     } else {
       await bot.launch();
       console.log("🚀 Polling mode");
     }
   } catch (err) {
-    console.log("❌ Launch failed → fallback polling");
+    console.log("❌ Webhook failed → fallback polling");
     await bot.launch();
   }
 })();
 
-app.listen(PORT, () => console.log(`🌍 Web running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🌍 Web dashboard running → PORT ${PORT}`)
+);
