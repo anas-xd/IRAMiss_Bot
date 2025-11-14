@@ -1,7 +1,7 @@
 {
   "name": "miss-ira-bot",
   "version": "2.0.0",
-  "description": "A fully rebuilt Telegram bot with auto-webhook, polling, song search (YT + Spotify), lyrics, user DB, and multi-engine downloader.",
+  "description": "A fully rebuilt Telegram bot with auto-webhook, polling, song search (YouTube + Spotify), lyrics, user DB, and secure downloader.",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
@@ -20,8 +20,7 @@
     "spotify-web-api-node": "^5.0.2",
     "telegraf": "^4.16.3",
     "yt-search": "^2.12.0",
-    "@distube/ytdl-core": "^4.11.5",
-    "ytdl-ext": "^2.0.2"
+    "@distube/ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
