@@ -1,16 +1,16 @@
 // =========================================================
-// utils/download.js — YTDLP + SPOTDL (Render Safe)
+// utils/download.js — YTDLP + Spotify (Render Safe)
 // =========================================================
 
 const fs = require("fs-extra");
 const path = require("path");
 const { ytdlp } = require("yt-dlp-exec");
-const Spotify = require("spotifydl-core");
+const Spotify = require("@nechlophomeriaa/spotifydl").default;
 
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
 
-// Spotify client (optional)
+// Spotify client 
 let spot = null;
 if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
   spot = new Spotify({
@@ -19,17 +19,18 @@ if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
   });
 }
 
-// Detect URL types
+// URL matchers
 const isYouTube = url =>
   /(youtube\.com|youtu\.be)/i.test(url);
 
 const isSpotify = url =>
-  /open\.spotify\.com\/(track|playlist|album)/i.test(url);
+  /open\.spotify\.com\/(track|album|playlist)/i.test(url);
 
 /**
  * downloadAudio(url, outPath)
  */
 async function downloadAudio(url, outPath) {
+
   // ==========================
   // SPOTIFY
   // ==========================
@@ -39,8 +40,8 @@ async function downloadAudio(url, outPath) {
     try {
       console.log("SPOTIFY → downloading…");
 
-      const mp3 = await spot.downloadTrack(url); // Buffer
-      fs.writeFileSync(outPath, mp3);
+      const buffer = await spot.downloadTrack(url); // returns buffer
+      fs.writeFileSync(outPath, buffer);
 
       console.log("SPOTIFY success");
       return;
@@ -51,7 +52,7 @@ async function downloadAudio(url, outPath) {
   }
 
   // ==========================
-  // YOUTUBE → YTDLP EXEC
+  // YOUTUBE → YTDLP
   // ==========================
   if (isYouTube(url)) {
     try {
@@ -63,9 +64,7 @@ async function downloadAudio(url, outPath) {
         output: outPath,
         noCheckCertificates: true,
         noWarnings: true,
-        preferFreeFormats: true,
-        ignoreErrors: true,
-        retries: 2
+        preferFreeFormats: true
       });
 
       console.log("YTDLP success");
@@ -76,10 +75,7 @@ async function downloadAudio(url, outPath) {
     }
   }
 
-  // ==========================
-  // INVALID LINK
-  // ==========================
-  throw new Error("Unsupported URL (not YT or Spotify)");
+  throw new Error("Unsupported URL");
 }
 
 module.exports = downloadAudio;
