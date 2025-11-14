@@ -1,157 +1,85 @@
-// =======================================================
-// commands/song.js — FINAL ULTRA CLEAN REBUILD (2025)
-// Compatible with 5-engine downloader
-// =======================================================
+// =========================================================
+// utils/download.js — YTDLP + SPOTDL (Render Safe)
+// =========================================================
 
-const yts = require("yt-search");
-const downloadAudio = require("../utils/download");
 const fs = require("fs-extra");
 const path = require("path");
+const { ytdlp } = require("yt-dlp-exec");
+const Spotify = require("spotifydl-core");
 
 const TMP = path.join(__dirname, "..", "tmp");
 fs.ensureDirSync(TMP);
 
-// Escape HTML safely
-const esc = (s = "") =>
-  String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-// =======================================================
-// OPTIONAL SPOTIFY ENRICH DATA
-// =======================================================
-async function getSpotifyInfo(title) {
-  try {
-    const ID = process.env.SPOTIFY_ID;
-    const SECRET = process.env.SPOTIFY_SECRET;
-    if (!ID || !SECRET) return null;
-
-    const SpotifyAPI = require("spotify-web-api-node");
-    const api = new SpotifyAPI({ clientId: ID, clientSecret: SECRET });
-
-    const token = (await api.clientCredentialsGrant()).body.access_token;
-    api.setAccessToken(token);
-
-    const data = await api.searchTracks(title, { limit: 1 });
-    if (!data.body.tracks.items.length) return null;
-
-    const s = data.body.tracks.items[0];
-    return {
-      artist: s.artists.map(a => a.name).join(", "),
-      album: s.album.name,
-      release: s.album.release_date,
-      cover: s.album.images?.[0]?.url || null,
-      url: s.external_urls?.spotify || null
-    };
-  } catch {
-    return null;
-  }
+// Spotify client (optional)
+let spot = null;
+if (process.env.SPOTIFY_ID && process.env.SPOTIFY_SECRET) {
+  spot = new Spotify({
+    clientId: process.env.SPOTIFY_ID,
+    clientSecret: process.env.SPOTIFY_SECRET
+  });
 }
 
-// =======================================================
-// EXPORT COMMAND
-// =======================================================
-module.exports = {
-  name: "song",
-  description: "Search YouTube & download any song.",
-  cooldown: 2,
+// Detect URL types
+const isYouTube = url =>
+  /(youtube\.com|youtu\.be)/i.test(url);
 
-  run: async (ctx, args) => {
-    const query = args.join(" ").trim();
-    if (!query) return ctx.reply("🎵 Use: /song <song name>");
+const isSpotify = url =>
+  /open\.spotify\.com\/(track|playlist|album)/i.test(url);
 
-    // Temporary message
-    const msg = await ctx.reply(`⏳ Searching for <b>${esc(query)}</b>...`, {
-      parse_mode: "HTML",
-    });
+/**
+ * downloadAudio(url, outPath)
+ */
+async function downloadAudio(url, outPath) {
+  // ==========================
+  // SPOTIFY
+  // ==========================
+  if (isSpotify(url)) {
+    if (!spot) throw new Error("Spotify keys missing");
 
     try {
-      // ---------------------------------------------------
-      // 1) Search YouTube
-      // ---------------------------------------------------
-      const r = await yts(query);
-      const videos = r?.videos?.slice(0, 6) || [];
+      console.log("SPOTIFY → downloading…");
 
-      if (!videos.length) {
-        return ctx.telegram.editMessageText(
-          msg.chat.id,
-          msg.message_id,
-          null,
-          "❌ No result found.",
-        );
-      }
+      const mp3 = await spot.downloadTrack(url); // Buffer
+      fs.writeFileSync(outPath, mp3);
 
-      // ---------------------------------------------------
-      // 2) Save user search session
-      // ---------------------------------------------------
-      const uid = String(ctx.from.id);
-      global.songSessions[uid] = {
-        videos,
-        createdAt: Date.now(),
-      };
+      console.log("SPOTIFY success");
+      return;
+    } catch (err) {
+      console.log("SPOTIFY error:", err.message);
+      throw new Error("Spotify download failed");
+    }
+  }
 
-      // ---------------------------------------------------
-      // 3) Clean result text
-      // ---------------------------------------------------
-      let txt = `🎵 <b>Results for:</b> <i>${esc(query)}</i>\n\n`;
+  // ==========================
+  // YOUTUBE → YTDLP EXEC
+  // ==========================
+  if (isYouTube(url)) {
+    try {
+      console.log("YOUTUBE → yt-dlp downloading…");
 
-      videos.forEach((v, i) => {
-        txt += `<b>${i + 1}.</b> ${esc(v.title)}\n`;
-        txt += `⏱ ${v.timestamp} • 👁 ${v.views.toLocaleString()} • ${esc(
-          v.author.name
-        )}\n\n`;
+      await ytdlp(url, {
+        extractAudio: true,
+        audioFormat: "mp3",
+        output: outPath,
+        noCheckCertificates: true,
+        noWarnings: true,
+        preferFreeFormats: true,
+        ignoreErrors: true,
+        retries: 2
       });
 
-      // ---------------------------------------------------
-      // 4) Inline Buttons (2 per row)
-      // ---------------------------------------------------
-      const kb = [];
-      for (let i = 0; i < videos.length; i += 2) {
-        const row = [];
-
-        const v1 = videos[i];
-        row.push({
-          text: `🎵 ${i + 1}`,
-          callback_data: `song_play:${uid}:${i}`,
-        });
-
-        if (videos[i + 1]) {
-          row.push({
-            text: `🎵 ${i + 2}`,
-            callback_data: `song_play:${uid}:${i + 1}`,
-          });
-        }
-
-        kb.push(row);
-      }
-
-      kb.push([{ text: "❌ Cancel", callback_data: `song_cancel:${uid}` }]);
-
-      // ---------------------------------------------------
-      // 5) Edit message into full result UI
-      // ---------------------------------------------------
-      await ctx.telegram.editMessageText(
-        msg.chat.id,
-        msg.message_id,
-        null,
-        txt,
-        {
-          parse_mode: "HTML",
-          reply_markup: { inline_keyboard: kb },
-        }
-      );
+      console.log("YTDLP success");
+      return;
     } catch (err) {
-      console.log("song.js error:", err.message);
-
-      try {
-        await ctx.telegram.editMessageText(
-          msg.chat.id,
-          msg.message_id,
-          null,
-          "⚠️ Search failed."
-        );
-      } catch {}
+      console.log("YTDLP error:", err.message);
+      throw new Error("YouTube download failed");
     }
-  },
-};
+  }
+
+  // ==========================
+  // INVALID LINK
+  // ==========================
+  throw new Error("Unsupported URL (not YT or Spotify)");
+}
+
+module.exports = downloadAudio;
